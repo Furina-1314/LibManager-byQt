@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  ".qt/rcc/qrc_appLibManager_raw_qml_0.cpp"
+  ".qt/rcc/qrc_qmake_LibManager.cpp"
+  ".rcc/qmlcache/appLibManager_Main_qml.cpp"
+  ".rcc/qmlcache/appLibManager_Main_qml.cpp.aotstats"
+  ".rcc/qmlcache/appLibManager_qmlcache_loader.cpp"
+  "CMakeFiles/appLibManager.dir/appLibManager_autogen/mocs_compilation.cpp.obj"
+  "CMakeFiles/appLibManager.dir/appLibManager_autogen/mocs_compilation.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/applibmanager_qmltyperegistrations.cpp.obj"
+  "CMakeFiles/appLibManager.dir/applibmanager_qmltyperegistrations.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.qt/rcc/qrc_appLibManager_raw_qml_0.cpp.obj"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.qt/rcc/qrc_appLibManager_raw_qml_0.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.qt/rcc/qrc_qmake_LibManager.cpp.obj"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.qt/rcc/qrc_qmake_LibManager.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.rcc/qmlcache/appLibManager_Main_qml.cpp.obj"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.rcc/qmlcache/appLibManager_Main_qml.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.rcc/qmlcache/appLibManager_qmlcache_loader.cpp.obj"
+  "CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.rcc/qmlcache/appLibManager_qmlcache_loader.cpp.obj.d"
+  "CMakeFiles/appLibManager.dir/main.cpp.obj"
+  "CMakeFiles/appLibManager.dir/main.cpp.obj.d"
+  "CMakeFiles/appLibManager_autogen.dir/AutogenUsed.txt"
+  "CMakeFiles/appLibManager_autogen.dir/ParseCache.txt"
+  "appLibManager_autogen"
+  "LibManager/appLibManager.qmltypes"
+  "appLibManager.exe"
+  "appLibManager.exe.manifest"
+  "appLibManager.pdb"
+  "appLibManager_autogen/mocs_compilation.cpp"
+  "appLibManager_autogen/timestamp"
+  "applibmanager_qmltyperegistrations.cpp"
+  "libappLibManager.dll.a"
+  "meta_types/appLibManager_json_file_list.txt"
+  "meta_types/appLibManager_json_file_list.txt.timestamp"
+  "meta_types/qt6applibmanager_metatypes.json"
+  "meta_types/qt6applibmanager_metatypes.json.gen"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/appLibManager.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
