@@ -216,7 +216,7 @@ public:
 };
 class Account {
 private:
-	UserID ID;//用户ID，Reader的ID应为8位数字
+	UserID ID;//用户ID，ReaderID应为8位非零开头数字,AdminID应为5位非零开头数字
 	bool IsValid;//账户有效性
 	QString Name;
 	Auth UserAuth;
@@ -227,7 +227,9 @@ public:
 	Account() :Name(""), IsValid(false), UserAuth(Auth::Illegal), BorrowLimit(-1) {}
 	// 身份与名称Setter
 	[[nodiscard]] ErrorCode SetID(long long int id) {
-		if (!(ID.Value <= 99999999 && ID.Value >= 10000000)) return ErrorCode::ILLEGAL_INPUT;
+		if ((UserAuth==Auth::Reader&&!(ID.Value <= 99999999 && ID.Value >= 10000000))
+			||(UserAuth == Auth::Admin && !(ID.Value <= 99999 && ID.Value >= 10000))) 
+			return ErrorCode::ILLEGAL_INPUT;
 		ID.Value = id;
 		return ErrorCode::SUCCESS;
 	}
