@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿//错误码
+#pragma once
 enum class Availability {
 	Illegal = -1,//不合法的单册数据：默认初始化的对象
 	Available = 1,//可外借
@@ -23,13 +24,14 @@ enum  class ErrorCode {
 	//用户相关错误
 	WRONG_USERNAME = 1000,//用户名不存在
 	WRONG_PASSWORD = 1001,//密码错误
-	EMPTY_INPUT = 1002,//空输入
-	ILLEGAL_INPUT = 1003,//非法输入：输入不合格式或赋值意图违反逻辑
+	EXISTING_ACCOUNT = 1002,//账户已存在
 	NO_ACCESS = 1004,//无权限
 	INVALID = 1005,//不可用的账户
-	EMPTY_USENAME = 1006,//空用户名
+	EMPTY_USERNAME = 1006,//空用户名
 	PASSWORD_TOO_SHORT = 1007,//密码过短
 	//业务相关错误
+	EMPTY_INPUT = 2002,//空输入
+	ILLEGAL_INPUT = 2003,//非法输入：输入不合格式或赋值意图违反逻辑
 	NO_RESULT = 2005,//未找到结果
 	VOLUME_NOT_AVAILABLE = 2006,//单册不可获取
 	VOLUME_OVERDUE = 2007,//存在单册逾期

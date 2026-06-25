@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿//数据类
+#pragma once
 #include<QDate>
 #include<QList>
 #include<QString>
@@ -82,7 +83,7 @@ public:
 		BorrowerID = -1;
 	}
 	const VolumeID stct_ID() const { return ID; }
-	const Availability i_IsAvailable() const { return IsAvailable; }
+	const Availability enum_IsAvailable() const { return IsAvailable; }
 	const bool b_IsOpenshelf() const { return IsOpenshelf; }
 	const BookLocation& stct_Location() const { return Location; }
 	const QDate& qd_DueDate() const { return DueDate; }
@@ -97,6 +98,9 @@ public:
 	ErrorCode SetAvailability(const Availability in) {
 		if (in != Availability::Illegal) { IsAvailable = in; return ErrorCode::SUCCESS; }
 		else  return ErrorCode::ILLEGAL_INPUT;
+	}
+	ErrorCode SetIsOpenshelf(bool in) {
+		IsOpenshelf = in; return ErrorCode::SUCCESS;
 	}
 	void SetDueDate(const QDate& in) { DueDate = in; }
 	void SetLocation(const BookLocation& in) { Location = in; }
@@ -122,9 +126,9 @@ public:
 	const QString& qs_Name() const { return Name; }
 	const QList<QString>& ql_Author() const { return Author; }
 	const QString& qs_Press() const { return Press; }
-	const Category cat_PubCategory() const { return PubCategory; }
+	const Category enum_PubCategory() const { return PubCategory; }
 	const int i_PubYear() const { return PubYear; }
-	const Language lang_PubLanguage() const { return PubLanguage; }
+	const Language enum_PubLanguage() const { return PubLanguage; }
 	const QList<Volume>& ql_VolumeList() const { return VolumeList; }
 	ErrorCode SetISBN(const QString& in) { return BookISBN.SetValue(in); }
 	ErrorCode SetName(const QString& in) {
@@ -201,7 +205,7 @@ public:
 };
 class Account {
 private:
-	UserID ID;
+	UserID ID;//用户ID，Reader的ID应为8位数字
 	bool IsValid;//账户有效性
 	QString Name;
 	Auth UserAuth;
@@ -211,12 +215,12 @@ public:
 	Account() :Name(""), IsValid(false), UserAuth(Auth::Illegal) {}
 	// 身份与名称Setter
 	[[nodiscard]] ErrorCode SetID(long long int id) {
-		if (id <= 0) return ErrorCode::ILLEGAL_INPUT;
+		if (!(ID.Value <= 99999999 && ID.Value >= 10000000)) return ErrorCode::ILLEGAL_INPUT;
 		ID.Value = id;
 		return ErrorCode::SUCCESS;
 	}
 	[[nodiscard]] ErrorCode SetName(const QString& name) {
-		if (name.isEmpty()) return ErrorCode::EMPTY_INPUT;
+		if (name.isEmpty()) return ErrorCode::EMPTY_USERNAME;
 		Name = name;
 		return ErrorCode::SUCCESS;
 	}
@@ -238,12 +242,14 @@ public:
 		return ErrorCode::SUCCESS;
 	}
 	//终态自检接口，确保该账户已准备就绪
-	bool IsReady() const {
+	const bool IsReady() const {
 		return IsValid && !Name.isEmpty() && !PasswordHash.isEmpty();
 	}
 	//Getter
 	const UserID& stct_ID() const { return ID; }
+	const bool b_IsValid() const { return IsValid; }
 	const QString& qs_Name() const { return Name; }
+	const Auth enum_UserAuth() const { return UserAuth; }
 	const QByteArray& qba_PasswordHash() const { return PasswordHash; }
 	const QByteArray& qba_Salt() const { return Salt; }
 };
