@@ -21,11 +21,22 @@ struct BookLocation {
 			floor >= 0 && shelf >= 0 && layer >= 0;
 	}
 };//馆藏位置
-class ISBN {
+class StringID {//字符型ID的抽象类
+public:
+	virtual ~StringID() = 0;
+	//设置值
+	[[nodiscard]] virtual ErrorCode SetValue(const QString& Input) = 0;
+	//Getter
+	virtual const QString& qs_Value() const = 0;
+	virtual const bool b_isValid() const = 0;
+};
+class ISBN :public StringID {
 private:
 	QString Value;//ISBN的值
 	bool isValid;
 public:
+	//析构
+	~ISBN() override = default;
 	// 缺省构造：处于非法空状态
 	ISBN() : Value(""), isValid(false) {}
 	// Setter
@@ -211,8 +222,9 @@ private:
 	Auth UserAuth;
 	QByteArray PasswordHash; // Hash
 	QByteArray Salt;         // salt
+	int BorrowLimit;//借阅上限
 public:
-	Account() :Name(""), IsValid(false), UserAuth(Auth::Illegal) {}
+	Account() :Name(""), IsValid(false), UserAuth(Auth::Illegal), BorrowLimit(-1) {}
 	// 身份与名称Setter
 	[[nodiscard]] ErrorCode SetID(long long int id) {
 		if (!(ID.Value <= 99999999 && ID.Value >= 10000000)) return ErrorCode::ILLEGAL_INPUT;
@@ -230,6 +242,10 @@ public:
 	}
 	[[nodiscard]] ErrorCode SetIsValid(bool in) {
 		IsValid = in; return ErrorCode::SUCCESS;
+	}
+	[[nodiscard]] ErrorCode SetBorrowLimit(int in) {
+		if (in<0) { return ErrorCode::ILLEGAL_INPUT; }
+		else { BorrowLimit=in; return ErrorCode::SUCCESS; }
 	}
 	// 密码设值（存储Hash）
 	[[nodiscard]] ErrorCode SetPassword(const QString& plainPassword) {
@@ -252,4 +268,5 @@ public:
 	const Auth enum_UserAuth() const { return UserAuth; }
 	const QByteArray& qba_PasswordHash() const { return PasswordHash; }
 	const QByteArray& qba_Salt() const { return Salt; }
+	const int i_BorrowLimit() const { return BorrowLimit; }
 };
