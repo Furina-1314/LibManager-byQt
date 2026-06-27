@@ -1,25 +1,29 @@
 ﻿//错误码
 #pragma once
-enum class Availability {
+enum class Availability //可用状态
+{
 	Illegal = -1,//不合法的单册数据：默认初始化的对象
 	Available = 1,//可外借
 	Unavailable_OnLoan = 2,//不可外借：外借中
 	Unavailable_Lost = 3,//不可外借：单册丢失
 	Unavailable_Processing = 4//不可外借：文献加工中
-};//可用状态
-enum class Library {
+};
+enum class Library //分馆信息
+{
 	Illegal = -1,//初始化默认值
 	LIB_North = 1,
 	LIB_West = 2,
 	LIB_Economic = 3,
 	LIB_Literature = 4,
 	LIB_Law = 5
-};//分馆信息
-enum class Area {
+};
+enum class Area //图书区信息：东/西/南/北区
+{
 	Illegal = -1,//初始化默认值
 	AREA_E = 1, AREA_W = 2, AREA_S = 3, AREA_N = 4
-};//图书区信息：东/西/南/北区
-enum  class ErrorCode {
+};
+enum  class ErrorCode //错误代码
+{
 	SUCCESS = 0,//成功
 	//用户相关错误
 	WRONG_USERNAME = 1000,//用户名不存在
@@ -53,8 +57,9 @@ enum  class ErrorCode {
 	DATA_ERROR = 3011,//数据错误（存在ID重复或非法等情况）
 	//预留项
 	OTHER_ERROR = 9999//其他（可能的）错误
-};//错误代码
-enum class Language {
+};
+enum class Language //出版文种
+{
 	Illegal = -1,//初始化默认值
 	Chinese = 1,
 	English = 2,
@@ -65,17 +70,19 @@ enum class Language {
 	Japanese = 7,
 	Korean = 8,
 	Other = 9
-};//出版文种
-enum class Category {
+};
+enum class Category //图书分类
+{
 	Illegal = -1,//初始化默认值
 	Literature = 1,
 	Philosophy = 2,
 	Linguistics = 3,
 	Art = 4,
 	Technology = 5
-};//图书分类
-enum class Auth {
+};
+enum class Auth //用户身份
+{
 	Illegal = -1,
 	Reader = 1,//读者
 	Admin = 2//管理员
-};//用户身份
+};
