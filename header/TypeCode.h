@@ -24,25 +24,33 @@ enum  class ErrorCode {
 	//用户相关错误
 	WRONG_USERNAME = 1000,//用户名不存在
 	WRONG_PASSWORD = 1001,//密码错误
-	EXISTING_ACCOUNT = 1002,//账户已存在
+	ACCOUNT_ALREADY_EXIST = 1002,//账户已存在
 	NO_ACCESS = 1004,//无权限
-	INVALID = 1005,//不可用的账户
+	ACCOUNT_INVALID = 1005,//不可用的账户
 	EMPTY_USERNAME = 1006,//空用户名
 	PASSWORD_TOO_SHORT = 1007,//密码过短
+	PASSWORD_MISMATCH = 1008,//两次密码不一致（注册时）
 	//业务相关错误
-	EMPTY_INPUT = 2002,//空输入
-	ILLEGAL_INPUT = 2003,//非法输入：输入不合格式或赋值意图违反逻辑
-	NO_RESULT = 2005,//未找到结果
-	VOLUME_NOT_AVAILABLE = 2006,//单册不可获取
+	EMPTY_INPUT = 2001,//空输入
+	ILLEGAL_INPUT = 2002,//非法输入：输入不合格式或赋值意图违反逻辑
+	NO_RESULT = 2003,//未找到结果
+	VOLUME_ALREADY_BORROWED = 2004,//单册已借阅（针对同一账户对同一单册的重复借阅操作）
+	VOLUME_RESERVED = 2005,//单册不可获取：已被预约
+	VOLUME_NOT_AVAILABLE = 2006,//单册不可获取：其他情况
 	VOLUME_OVERDUE = 2007,//存在单册逾期
-	MAX_BORROW_LIMIT = 2008,//达到借阅上限
+	MAX_BORROW_LIMIT = 2008,//账户达到借阅上限
+	VOLUME_ALREADY_EXIST = 2009,//创建的单册已存在（对于Admin）
+	BOOK_ALREADY_EXIST = 2010,//创建的图书已存在（对于Admin）
+	NOT_EXIST = 2011,//删改的单册/图书不存在（对于Admin）
+	LOCATION_INVALID = 2012,// 馆藏位置无效
 	//系统相关错误
 	SYSTEM_ERROR = 3001,//意外的系统错误
 	FAILED_SEARCH = 3006,//搜寻失败
 	FAILED_TO_READ = 3007,//读入失败
 	FAILED_TO_WRITE = 3008,//写出失败
-	DATABASE_ERROR = 3009,//数据库错误
-	DATA_ERROR = 3010,//数据错误（存在ID重复或非法等情况）
+	DATABASE_BUSY = 3010,//数据库忙
+	DATABASE_ERROR = 3010,//数据库错误
+	DATA_ERROR = 3011,//数据错误（存在ID重复或非法等情况）
 	//预留项
 	OTHER_ERROR = 9999//其他（可能的）错误
 };//错误代码
