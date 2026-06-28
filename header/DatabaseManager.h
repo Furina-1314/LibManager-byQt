@@ -10,14 +10,14 @@
 #include "DataException.h"
 
 class DatabaseController : public QObject {
-    Q_OBJECT // 宏定义：启用元对象编译器 (MOC)，这是 QML 识别 C++ 类的核心
+    Q_OBJECT 
 
 public:
     explicit DatabaseController(QObject* parent = nullptr) : QObject(parent) {}
 
     // 析构函数
     ~DatabaseController() {
-        // 如果连接池中还存在该连接，则执行安全关闭逻辑
+        // 若连接池中仍存在该连接，则执行安全关闭逻辑
         if (QSqlDatabase::contains("qt_sql_default_connection")) {
             closeDatabase();
         }
@@ -163,11 +163,11 @@ public:
 
         }
         catch (const DatabaseException& ex) {
-            // 捕获到我们异常后回滚已执行的部分，防止产生脏表
+            // 捕获异常后回滚已执行部分，防止产生脏表
             db.rollback();
-            // 在 C++ 控制台打印安全的 QString 错误轨迹
+            // 在 C++ 控制台打印 QString 错误轨迹
             qCritical().noquote() << "初始化受阻:" << ex.qWhat();
-            // 完美剥离 ErrorCode 返回给 QML 业务层
+            // ErrorCode 返回给 QML 业务层
             return ex.code();
         }
         return ErrorCode::SUCCESS;
