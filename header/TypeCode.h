@@ -50,11 +50,13 @@ enum  class ErrorCode //错误代码
 	//系统相关错误
 	SYSTEM_ERROR = 3001,//意外的系统错误
 	FAILED_SEARCH = 3006,//搜寻失败
-	FAILED_TO_READ = 3007,//读入失败
-	FAILED_TO_WRITE = 3008,//写出失败
-	DATABASE_BUSY = 3010,//数据库忙
+	FAILED_TO_READ = 3007,//读失败
+	FAILED_TO_WRITE = 3008,//写失败
+	DATABASE_BUSY = 3009,//数据库忙
 	DATABASE_ERROR = 3010,//数据库错误
-	DATA_ERROR = 3011,//数据错误（存在ID重复或非法等情况）
+	DATABASE_OPEN_FAILED = 3011,//数据库打开错误
+	TRANSACTION_START_FAILED = 3012,//事务开始错误
+	DATA_ERROR = 3013,//数据错误（存在ID重复或非法等情况）
 	//预留项
 	OTHER_ERROR = 9999//其他（可能的）错误
 };

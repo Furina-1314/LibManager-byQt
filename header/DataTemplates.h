@@ -12,18 +12,21 @@
 class NumCheck //纯数字ID检验
 {
 public:
-	const ErrorCode IsNumID(const QString& str) const {
+	virtual ~NumCheck() = default;
+	static ErrorCode IsNumID(const QString& str) {
 		int i = 0;
 		for (i = 0; i < str.length(); i++) {
 			if (!str[i].isDigit())	return ErrorCode::ILLEGAL_INPUT;
 		}
+		if (str[0] == '0')	return ErrorCode::ILLEGAL_INPUT;//要求非零开头
 		return ErrorCode::SUCCESS;
 	}
 };
 class DigitCheck //位数检验
 {
 public:
-	const ErrorCode IsRightDigit(const QString& str, int digit) const {
+	virtual ~DigitCheck() = default;
+	static ErrorCode IsRightDigit(const QString& str, int digit) {
 		if (str.length() == digit) return ErrorCode::SUCCESS;
 		else  return ErrorCode::ILLEGAL_INPUT;
 	}
@@ -157,30 +160,33 @@ private:
 	BookLocation Location;//馆藏位置
 	QDate DueDate;//外借到期时间
 	UserID BorrowerID;//目前借阅者的ID，预备供用户管理使用
+	QString Note;//单册信息备注
 public:
 	Volume(Availability b = Availability::Illegal, bool c = 0, QDate date = QDate()) {
 		IsAvailable = b; IsOpenshelf = c;
 		DueDate = date;
 			}
-	const Availability enum_IsAvailable() const { return IsAvailable; }
-	const bool b_IsOpenshelf() const { return IsOpenshelf; }
+	Availability enum_IsAvailable() const { return IsAvailable; }
+	bool b_IsOpenshelf() const { return IsOpenshelf; }
 	const BookLocation& stct_Location() const { return Location; }
 	const QDate& qd_DueDate() const { return DueDate; }
-	ErrorCode SetVolID(const VolumeID& in) {
+	const QString& qs_Note() const { return Note; }
+	[[nodiscard]] ErrorCode SetVolID(const VolumeID& in) {
 		return VolID.SetValue(in.qs_Value());
 	}
-	ErrorCode SetBorrwerID(const UserID& in) {
+	[[nodiscard]] ErrorCode SetBorrowerID(const UserID& in) {
 		return BorrowerID.SetValue(in.qs_Value());
 	}
-	ErrorCode SetAvailability(const Availability in) {
+	[[nodiscard]] ErrorCode SetAvailability(const Availability in) {
 		if (in != Availability::Illegal) { IsAvailable = in; return ErrorCode::SUCCESS; }
 		else  return ErrorCode::ILLEGAL_INPUT;
 	}
-	ErrorCode SetIsOpenshelf(bool in) {
+	[[nodiscard]] ErrorCode SetIsOpenshelf(bool in) {
 		IsOpenshelf = in; return ErrorCode::SUCCESS;
 	}
-	void SetDueDate(const QDate& in) { DueDate = in; }
-	void SetLocation(const BookLocation& in) { Location = in; }
+	[[nodiscard]] ErrorCode SetDueDate(const QDate& in) { DueDate = in; return ErrorCode::SUCCESS; }
+	[[nodiscard]] ErrorCode SetLocation(const BookLocation& in) { Location = in; return ErrorCode::SUCCESS; }
+	[[nodiscard]] ErrorCode SetNote(const QString& in) { Note = in; return ErrorCode::SUCCESS; }
 };
 class Book {
 private:
@@ -192,6 +198,7 @@ private:
 	int PubYear;//出版年份
 	Language PubLanguage;//出版文种
 	QList<Volume> VolumeList;//单册列表
+	QString Introduction;//图书介绍
 public:
 	Book(QString b = "", QList<QString> auth = QList<QString>(), QString prss = "",
 		Category cat = Category::Illegal, int yr = -9999, Language lang = Language::Illegal,
@@ -203,31 +210,36 @@ public:
 	const QString& qs_Name() const { return Name; }
 	const QList<QString>& ql_Author() const { return Author; }
 	const QString& qs_Press() const { return Press; }
-	const Category enum_PubCategory() const { return PubCategory; }
-	const int i_PubYear() const { return PubYear; }
-	const Language enum_PubLanguage() const { return PubLanguage; }
+	Category enum_PubCategory() const { return PubCategory; }
+	int i_PubYear() const { return PubYear; }
+	Language enum_PubLanguage() const { return PubLanguage; }
 	const QList<Volume>& ql_VolumeList() const { return VolumeList; }
-	ErrorCode SetISBN(const QString& in) { return BookISBN.SetValue(in); }
-	ErrorCode SetName(const QString& in) {
+	const QString& qs_Introduction() const { return Introduction; }
+	[[nodiscard]] ErrorCode SetISBN(const QString& in) { return BookISBN.SetValue(in); }
+	[[nodiscard]] ErrorCode SetName(const QString& in) {
 		if (in.isEmpty()) { return ErrorCode::EMPTY_INPUT; }
 		else { Name = in; return ErrorCode::SUCCESS; }
 	}
-	ErrorCode SetAuthor(const QList<QString>& in) {
+	[[nodiscard]] ErrorCode SetAuthor(const QList<QString>& in) {
 		if (in.isEmpty() || in[0].isEmpty()) { return ErrorCode::EMPTY_INPUT; }
 		else { Author = in; return ErrorCode::SUCCESS; }
 	}
-	ErrorCode SetPress(const QString& in) {
+	[[nodiscard]] ErrorCode SetPress(const QString& in) {
 		if (in.isEmpty()) { return ErrorCode::EMPTY_INPUT; }
 		else { Press = in; return ErrorCode::SUCCESS; }
 	}
-	ErrorCode SetPubCategory(const Category in) {
+	[[nodiscard]] ErrorCode SetPubCategory(const Category in) {
 		if (in != Category::Illegal) { PubCategory = in; return ErrorCode::SUCCESS; }
 		else  return ErrorCode::ILLEGAL_INPUT;
 	}
-	void SetPubYear(const int yr) { PubYear = yr; }
-	ErrorCode SetPubLanguage(const Language in) {
+	[[nodiscard]] ErrorCode SetPubYear(const int yr) { PubYear = yr; return ErrorCode::SUCCESS; }
+	[[nodiscard]] ErrorCode SetPubLanguage(const Language in) {
 		if (in != Language::Illegal) { PubLanguage = in; return ErrorCode::SUCCESS; }
 		else  return ErrorCode::ILLEGAL_INPUT;
+	}
+	[[nodiscard]] ErrorCode SetIntroduction(const QString& in) {
+		if (in.isEmpty())	return ErrorCode::EMPTY_INPUT;
+		Introduction = in; return ErrorCode::SUCCESS;
 	}
 };
 class LoanRecord {
@@ -245,9 +257,9 @@ public:
 	LoanRecord(bool b = true, bool bb=false,QDate c = QDate(), QDate d = QDate(), QDate e = QDate()) :
 		IsReturned(b), IsOverdue(bb), LoanDate(c), DueDate(d), ReturnDate(e) {}
 	//Getter
-	const long long int lli_RecordID() const { return RecordID; }
-	const bool b_IsReturned() const { return IsReturned; }
-	const bool b_IsOverdue() const { return IsOverdue; }
+	long long int lli_RecordID() const { return RecordID; }
+	bool b_IsReturned() const { return IsReturned; }
+	bool b_IsOverdue() const { return IsOverdue; }
 	const QDate& qd_LoanDate() const { return LoanDate; }
 	const QDate& qd_DueDate() const { return DueDate; }
 	const QDate& qd_ReturnDate() const { return ReturnDate; }
@@ -255,6 +267,9 @@ public:
 	[[nodiscard]] ErrorCode SetRecordID(long long int id) {
 		if (id <= 0) return ErrorCode::ILLEGAL_INPUT;
 		RecordID = id; return ErrorCode::SUCCESS;
+	}
+	[[nodiscard]] ErrorCode SetBookISBN(const ISBN& in) {
+		return BookISBN.SetValue(in.qs_Value());
 	}
 	[[nodiscard]] ErrorCode SetVolumeID(const VolumeID& in) {
 		return VolID.SetValue(in.qs_Value());
@@ -311,20 +326,21 @@ public:
 		return ErrorCode::SUCCESS;
 	}
 	//终态自检接口，确保该账户已准备就绪
-	const bool IsReady() const {
+	bool IsReady() const {
 		return IsValid && !Name.isEmpty() && !PasswordHash.isEmpty();
 	}
 	//Getter
-	const bool b_IsValid() const { return IsValid; }
+	bool b_IsValid() const { return IsValid; }
 	const QString& qs_Name() const { return Name; }
-	const Auth enum_ReaderAuth() const { return ReaderAuth; }
+	Auth enum_ReaderAuth() const { return ReaderAuth; }
 	const QByteArray& qba_PasswordHash() const { return PasswordHash; }
 	const QByteArray& qba_Salt() const { return Salt; }
-	const int i_BorrowLimit() const { return BorrowLimit; }
+	int i_BorrowLimit() const { return BorrowLimit; }
 };
 class AdminAccount {
 private:
 	AdminID ID;//用户ID，AdminID应为5位非零开头数字
+	const QString Name = "Admin";//Admin的用户名不可更改
 	bool IsValid;//账户有效性
 	Auth AdminAuth;
 	QByteArray PasswordHash; // Hash
@@ -353,13 +369,14 @@ public:
 		this->PasswordHash = QCryptographicHash::hash(combined, QCryptographicHash::Sha3_512);
 		return ErrorCode::SUCCESS;
 	}
-	//终态自检接口，确保该账户已准备就绪
-	const bool IsReady() const {
+	//终态自检，确保准备就绪
+	bool IsReady() const {
 		return IsValid && !PasswordHash.isEmpty();
 	}
 	//Getter
-	const bool b_IsValid() const { return IsValid; }
-	const Auth enum_AdminAuth() const { return AdminAuth; }
+	bool b_IsValid() const { return IsValid; }
+	const QString& qs_Name() const { return Name; }
+	Auth enum_AdminAuth() const { return AdminAuth; }
 	const QByteArray& qba_PasswordHash() const { return PasswordHash; }
 	const QByteArray& qba_Salt() const { return Salt; }
 };
