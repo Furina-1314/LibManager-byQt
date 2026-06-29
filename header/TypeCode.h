@@ -26,7 +26,7 @@ enum  class ErrorCode //错误代码
 {
 	SUCCESS = 0,//成功
 	//用户相关错误
-	WRONG_USERNAME = 1000,//用户名不存在
+	USERID_NOT_EXIST = 1000,//用户名不存在
 	WRONG_PASSWORD = 1001,//密码错误
 	ACCOUNT_ALREADY_EXIST = 1002,//账户已存在
 	NO_ACCESS = 1004,//无权限

@@ -315,6 +315,12 @@ public:
 		if (in<0) { return ErrorCode::ILLEGAL_INPUT; }
 		else { BorrowLimit=in; return ErrorCode::SUCCESS; }
 	}
+	[[nodiscard]] ErrorCode SetSalt(QByteArray in) {
+		Salt = in; return ErrorCode::SUCCESS;
+	}
+	[[nodiscard]] ErrorCode SetPasswordHash(QByteArray in) {
+		PasswordHash = in; return ErrorCode::SUCCESS;
+	}
 	// 密码设值（存储Hash）
 	[[nodiscard]] ErrorCode SetPassword(const QString& plainPassword) {
 		if (plainPassword.length() < 8) return ErrorCode::PASSWORD_TOO_SHORT;
@@ -330,6 +336,7 @@ public:
 		return IsValid && !Name.isEmpty() && !PasswordHash.isEmpty();
 	}
 	//Getter
+	const UserID& c_ID() const { return ID; }
 	bool b_IsValid() const { return IsValid; }
 	const QString& qs_Name() const { return Name; }
 	Auth enum_ReaderAuth() const { return ReaderAuth; }
@@ -343,6 +350,7 @@ private:
 	const QString Name = "Admin";//Admin的用户名不可更改
 	bool IsValid;//账户有效性
 	Auth AdminAuth;
+	const int BorrowLimit = 0;//Admin不可借书
 	QByteArray PasswordHash; // Hash
 	QByteArray Salt;         // salt
 public:
@@ -359,6 +367,12 @@ public:
 	[[nodiscard]] ErrorCode SetIsValid(bool in) {
 		IsValid = in; return ErrorCode::SUCCESS;
 	}
+	[[nodiscard]] ErrorCode SetSalt(QByteArray in) {
+		Salt = in; return ErrorCode::SUCCESS;
+	}
+	[[nodiscard]] ErrorCode SetPasswordHash(QByteArray in) {
+		PasswordHash = in; return ErrorCode::SUCCESS;
+	}
 	// 密码设值（存储Hash）
 	[[nodiscard]] ErrorCode SetPassword(const QString& plainPassword) {
 		if (plainPassword.length() < 8) return ErrorCode::PASSWORD_TOO_SHORT;
@@ -374,9 +388,11 @@ public:
 		return IsValid && !PasswordHash.isEmpty();
 	}
 	//Getter
+	const AdminID& c_ID() const { return ID; }
 	bool b_IsValid() const { return IsValid; }
 	const QString& qs_Name() const { return Name; }
 	Auth enum_AdminAuth() const { return AdminAuth; }
 	const QByteArray& qba_PasswordHash() const { return PasswordHash; }
 	const QByteArray& qba_Salt() const { return Salt; }
+	int i_BorrowLimit() const { return BorrowLimit; }
 };

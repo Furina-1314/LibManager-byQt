@@ -3,6 +3,7 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlRecord>
 #include <QString>
 #include <QDebug>
 #include "DataTemplates.h"
@@ -124,6 +125,7 @@ public:
                          UserName TEXT NOT NULL COLLATE NOCASE,
                          Auth INTEGER NOT NULL,
                          Validity INTEGER NOT NULL,
+                         BorrowLimit INTEGER NOT NULL,
                          Salt TEXT NOT NULL,
                          PasswordHash TEXT NOT NULL,                         
                          CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -133,6 +135,12 @@ public:
 
             if (!query.exec("CREATE INDEX IF NOT EXISTS idx_account_username ON Account(UserName);"))
                 throw DatabaseException(ErrorCode::DATABASE_ERROR, "创建 idx_account_username 索引失败", query.lastError());
+            if (!query.exec("CREATE INDEX IF NOT EXISTS idx_account_auth_id ON Account(Auth, ID);"))
+                throw DatabaseException(ErrorCode::DATABASE_ERROR, "创建 idx_account_auth_id 索引失败", query.lastError());
+            if (!query.exec("CREATE INDEX IF NOT EXISTS idx_account_id ON Account(ID);"))
+                throw DatabaseException(ErrorCode::DATABASE_ERROR, "创建 idx_account_id 索引失败", query.lastError());
+            if (!query.exec("CREATE INDEX IF NOT EXISTS idx_account_validity ON Account(Validity);"))
+                throw DatabaseException(ErrorCode::DATABASE_ERROR, "创建 idx_account_validity 索引失败", query.lastError());
 
             if (!query.exec(R"(
                         --借阅流水表
@@ -188,4 +196,229 @@ public:
 
         return ErrorCode::SUCCESS;
     }
+};
+
+// 账户DAO
+class AccountDAO : public QObject {//账户类DAO
+// 注销将采用软删除方式，故只需 Update
+public:
+
+    [[nodiscard]] ErrorCode isUserExists(const QString& userid) const//查询用户是否存在
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
+        }
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+        query.prepare("SELECT COUNT(*) FROM Account WHERE ID = :input");
+        query.bindValue(":input", userid);
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询账户表失败", query.lastError());
+        }
+
+        if (query.next()) {
+            if (query.value(0).toInt() > 0) return ErrorCode::SUCCESS;
+            else return ErrorCode::USERID_NOT_EXIST;
+        }
+    }
+
+    // 查询读者接口
+    [[nodiscard]] ErrorCode getReaderInfo(const QString& userid, QList<ReaderAccount>& results) const // 查询读者信息
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
+        }
+        // 确保传出的容器初始状态干净
+        results.clear();
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+        // 带过滤约束的查询
+        query.prepare("SELECT * FROM Account WHERE Auth=0 AND ID LIKE :input");
+        query.bindValue(":input", userid);
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
+        }
+
+        QSqlRecord record = query.record();
+        int idxId = record.indexOf("ID");
+        int idxUserName = record.indexOf("UserName");
+        int idxAuth = record.indexOf("Auth");
+        int idxValidity = record.indexOf("Validity");
+        int idxLimit = record.indexOf("BorrowLimit");
+        int idxSalt = record.indexOf("Salt");
+        int idxHash = record.indexOf("PasswordHash");
+
+        // 检查字段映射是否断裂
+        if (idxId == -1 || idxUserName == -1) {
+            throw DatabaseException(ErrorCode::SYSTEM_ERROR, "底层 SQL 字段映射异常");
+        }
+
+        while (query.next()) {
+            ReaderAccount account;
+            UserID uid;
+            uid.SetValue(query.value(idxId).toString());
+            account.SetID(uid);
+            account.SetName(query.value(idxUserName).toString());
+            account.SetIsValid(query.value(idxValidity).toInt() != 0);
+            account.ActivateReader(static_cast<Auth>(query.value(idxAuth).toInt()));
+            account.SetBorrowLimit(query.value(idxLimit).toInt());
+            account.SetSalt(QByteArray::fromBase64(query.value(idxSalt).toString().toUtf8()));
+            account.SetPasswordHash(QByteArray::fromBase64(query.value(idxHash).toString().toUtf8()));
+
+            results.append(account);
+        }
+        // 根据结果集容量判定状态
+        if (results.isEmpty()) {
+            return ErrorCode::USERID_NOT_EXIST;
+        }
+        // 正常执行流的返回值
+        return ErrorCode::SUCCESS;
+    }
+
+    // 查询管理员接口
+    [[nodiscard]] ErrorCode getAdminInfo(const QString& userid, QList<AdminAccount>& results) // 查询管理员信息
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
+        }
+        // 确保传出的容器初始状态干净
+        results.clear();
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+        // 带过滤约束的查询
+        query.prepare("SELECT * FROM Account WHERE Auth=1 AND ID LIKE :input");
+        query.bindValue(":input", userid);
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
+        }
+
+        QSqlRecord record = query.record();
+        int idxId = record.indexOf("ID");
+        int idxAuth = record.indexOf("Auth");
+        int idxValidity = record.indexOf("Validity");
+        int idxSalt = record.indexOf("Salt");
+        int idxHash = record.indexOf("PasswordHash");
+
+        // 检查字段映射是否断裂
+        if (idxId == -1) {
+            throw DatabaseException(ErrorCode::SYSTEM_ERROR, "底层 SQL 字段映射异常");
+        }
+
+        while (query.next()) {
+            AdminAccount account;
+            AdminID adminid;
+            adminid.SetValue(query.value(idxId).toString());
+            account.SetID(adminid);
+            account.SetIsValid(query.value(idxValidity).toInt() != 0);
+            account.ActivateAdmin(static_cast<Auth>(query.value(idxAuth).toInt()));
+            account.SetSalt(QByteArray::fromBase64(query.value(idxSalt).toString().toUtf8()));
+            account.SetPasswordHash(QByteArray::fromBase64(query.value(idxHash).toString().toUtf8()));
+
+            results.append(account);
+        }
+        // 根据结果集容量判定状态
+        if (results.isEmpty()) {
+            return ErrorCode::USERID_NOT_EXIST;
+        }
+        // 正常执行流的返回值
+        return ErrorCode::SUCCESS;
+    }
+
+    [[nodiscard]] ErrorCode updateReaderInfo(const ReaderAccount& in) // 更新读者信息
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开");
+        }
+        if (!in.IsReady())   return ErrorCode::ILLEGAL_INPUT; // 保证传入的信息合法
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 使用 ON CONFLICT 实现Upsert
+        // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
+        query.prepare(R"(
+            INSERT INTO Account (ID, UserName, Auth, Validity, BorrowLimit, Salt, PasswordHash, CreatedAt, EditedAt) 
+            VALUES (:id, :name, :auth, :validity, :limit, :salt, :hash, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(ID) DO UPDATE SET 
+                UserName = excluded.UserName,
+                Auth = excluded.Auth,
+                Validity = excluded.Validity,
+                BorrowLimit = excluded.BorrowLimit,
+                Salt = excluded.Salt,
+                PasswordHash = excluded.PasswordHash,
+                -- 冲突时，旧记录的 CreatedAt 将原封不动，仅 EditedAt 会被刷新
+                EditedAt = CURRENT_TIMESTAMP
+        )");
+
+        // 数据装配与类型强转
+        query.bindValue(":id", in.c_ID().qs_Value());
+        query.bindValue(":name", in.qs_Name());
+        query.bindValue(":auth", static_cast<int>(in.enum_ReaderAuth()));
+        query.bindValue(":validity", in.b_IsValid() ? 1 : 0);
+        query.bindValue(":limit", in.i_BorrowLimit());
+        // 二进制转换：QByteArray -> Base64 编码 -> 存入 TEXT
+        query.bindValue(":salt", QString(in.qba_Salt().toBase64()));
+        query.bindValue(":hash", QString(in.qba_PasswordHash().toBase64()));
+
+        // 执行并捕获异常
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存账户数据失败", query.lastError());
+        }
+
+        return ErrorCode::SUCCESS;
+    }
+    [[nodiscard]] ErrorCode updateAdminInfo(const AdminAccount& in) // 更新管理员信息
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开");
+        }
+        if (!in.IsReady())   return ErrorCode::ILLEGAL_INPUT; // 保证传入的信息合法
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 使用 ON CONFLICT 实现Upsert
+        // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
+        query.prepare(R"(
+            INSERT INTO Account (ID, UserName, Auth, Validity, BorrowLimit, Salt, PasswordHash, CreatedAt, EditedAt) 
+            VALUES (:id, :name, :auth, :validity, :limit, :salt, :hash, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(ID) DO UPDATE SET 
+                UserName = excluded.UserName,
+                Auth = excluded.Auth,
+                Validity = excluded.Validity,
+                BorrowLimit = excluded.BorrowLimit,
+                Salt = excluded.Salt,
+                PasswordHash = excluded.PasswordHash,
+                -- 冲突时，旧记录的 CreatedAt 将原封不动，仅 EditedAt 会被刷新
+                EditedAt = CURRENT_TIMESTAMP
+        )");
+
+        // 数据装配与类型强转
+        query.bindValue(":id", in.c_ID().qs_Value());
+        query.bindValue(":name", in.qs_Name());
+        query.bindValue(":auth", static_cast<int>(in.enum_AdminAuth()));
+        query.bindValue(":validity", in.b_IsValid() ? 1 : 0);
+        query.bindValue(":limit", in.i_BorrowLimit());
+        // 二进制转换：QByteArray -> Base64 编码 -> 存入 TEXT
+        query.bindValue(":salt", QString(in.qba_Salt().toBase64()));
+        query.bindValue(":hash", QString(in.qba_PasswordHash().toBase64()));
+
+        // 执行并捕获异常
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存账户数据失败", query.lastError());
+        }
+
+        return ErrorCode::SUCCESS;
+    }
+};
+
+// 图书DAO
+class BookDAO {// 图书类DAO
+public:
+
 };
