@@ -166,6 +166,7 @@ public:
 		IsAvailable = b; IsOpenshelf = c;
 		DueDate = date;
 			}
+	const VolumeID& c_VolID() const { return VolID; }
 	Availability enum_IsAvailable() const { return IsAvailable; }
 	bool b_IsOpenshelf() const { return IsOpenshelf; }
 	const BookLocation& stct_Location() const { return Location; }
@@ -215,6 +216,7 @@ public:
 	Language enum_PubLanguage() const { return PubLanguage; }
 	const QList<Volume>& ql_VolumeList() const { return VolumeList; }
 	const QString& qs_Introduction() const { return Introduction; }
+	const ISBN& c_BookISBN() const { return BookISBN; }
 	[[nodiscard]] ErrorCode SetISBN(const QString& in) { return BookISBN.SetValue(in); }
 	[[nodiscard]] ErrorCode SetName(const QString& in) {
 		if (in.isEmpty()) { return ErrorCode::EMPTY_INPUT; }
@@ -236,6 +238,10 @@ public:
 	[[nodiscard]] ErrorCode SetPubLanguage(const Language in) {
 		if (in != Language::Illegal) { PubLanguage = in; return ErrorCode::SUCCESS; }
 		else  return ErrorCode::ILLEGAL_INPUT;
+	}
+	[[npdiscard]] ErrorCode SetVolumeList(const QList<Volume>& in) {
+		if (in.isEmpty())	return ErrorCode::ILLEGAL_INPUT;
+		VolumeList = in; return ErrorCode::SUCCESS;
 	}
 	[[nodiscard]] ErrorCode SetIntroduction(const QString& in) {
 		if (in.isEmpty())	return ErrorCode::EMPTY_INPUT;
@@ -333,7 +339,7 @@ public:
 	}
 	//终态自检接口，确保该账户已准备就绪
 	bool IsReady() const {
-		return IsValid && !Name.isEmpty() && !PasswordHash.isEmpty();
+		return !Name.isEmpty() && !PasswordHash.isEmpty();
 	}
 	//Getter
 	const UserID& c_ID() const { return ID; }
@@ -385,7 +391,7 @@ public:
 	}
 	//终态自检，确保准备就绪
 	bool IsReady() const {
-		return IsValid && !PasswordHash.isEmpty();
+		return !PasswordHash.isEmpty();
 	}
 	//Getter
 	const AdminID& c_ID() const { return ID; }
