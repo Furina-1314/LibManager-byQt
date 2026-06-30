@@ -156,7 +156,7 @@ public:
                          DueDate TIMESTAMP NOT NULL,        -- 应还时间由 C++ 业务层计算后传入
                          ReturnDate TIMESTAMP,              -- 应还时间必须由 C++ 业务层计算后传入      
 
-                         FOREIGN KEY (ISBN, VolID) REFERENCES Volume(ISBN, VolID) ON DELETE RESTRICT ON UPDATE CASCADE,
+                         FOREIGN KEY (ISBN, VolID) REFERENCES Volume(ISBN, VolID) ON DELETE RESTRICT ON UPDATE CASCADE,   --禁止级联删除
                          FOREIGN KEY (BorrowerID) REFERENCES Account(ID) ON DELETE RESTRICT ON UPDATE CASCADE                       )
                       )")) throw DatabaseException(ErrorCode::DATABASE_ERROR, "创建 LoanRecord 表失败", query.lastError());
 
@@ -330,7 +330,7 @@ public:
         return ErrorCode::SUCCESS;
     }
 
-    [[nodiscard]] ErrorCode updateReaderInfo(const ReaderAccount& in) // 更新读者信息
+    [[nodiscard]] ErrorCode updateReaderInfo(const ReaderAccount& in) const// 更新读者信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
@@ -373,7 +373,7 @@ public:
 
         return ErrorCode::SUCCESS;
     }
-    [[nodiscard]] ErrorCode updateAdminInfo(const AdminAccount& in) // 更新管理员信息
+    [[nodiscard]] ErrorCode updateAdminInfo(const AdminAccount& in) const// 更新管理员信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
@@ -544,7 +544,7 @@ public:
         return ErrorCode::SUCCESS;
     }
 
-    [[nodiscard]] ErrorCode updateBookInfo(const Book& in) // 更新图书信息
+    [[nodiscard]] ErrorCode updateBookInfo(const Book& in) const// 更新图书信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
@@ -630,7 +630,7 @@ public:
 
     }
 
-    [[nodiscard]] ErrorCode updateVolumeInfo(const Book& in) // 更新单册信息
+    [[nodiscard]] ErrorCode updateVolumeInfo(const Book& in) const// 更新单册信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
