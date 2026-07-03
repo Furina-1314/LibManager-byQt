@@ -820,20 +820,21 @@ class LoanRecordDAO {
 public:
 
     // 查询流水接口
-    [[nodiscard]] ErrorCode getLoanRecord(const LoanRecord& queryrecord, const QList<Filter>& filter, QList<LoanRecord>& results) const // 基于 Filter 查询流水信息
+    [[nodiscard]] ErrorCode getLoanRecord(const LoanRecord& queryrecord, const QDate& startDate, const QDate& endDate, const QList<Filter>& filter, QList<LoanRecord>& results) const
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
             throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
         }
 
-        results.clear();
-        // 查询Volume
+        results.clear(); // 严谨清空
+
         QSqlQuery query(db);
         query.setForwardOnly(true);
 
-        // 带过滤约束的查询
         QString sql = "SELECT * FROM LoanRecord WHERE 1 = 1 ";
+
+        // SQL 拼接
         for (int i = 0; i < filter.size(); i++) {
             switch (filter[i]) {
             case Filter::ISBN:
@@ -846,19 +847,25 @@ public:
                 sql += "AND IsReturned = :isreturned "; break;
             case Filter::IsOverdue:
                 sql += "AND IsOverdue = :isoverdue "; break;
+
+            // 使用外置的 start 和 end 参数构建区间
             case Filter::BorrowDate:
-                sql += "AND date(BorrowDate) = :borrowdate"; break;
+                sql += "AND BorrowDate >= :startdate AND BorrowDate < :enddate "; break;
             case Filter::DueDate:
-                sql += "AND date(DueDate) = :duedate"; break;
+                sql += "AND DueDate >= :startdate AND DueDate < :enddate "; break;
             case Filter::ReturnDate:
-                sql += "AND date(ReturnDate) = :returndate"; break;  // 注意：针对未归还的记录，查询应使用 IsReturned 。
-            // 借阅流水不支持书名模糊查询，应当得到图书的ISBN后利用ISBN查询
+                sql += "AND ReturnDate >= :startdate AND ReturnDate < :enddate "; break;
+
             case Filter::Title:
                 throw DatabaseException(ErrorCode::ILLEGAL_INPUT, "底层调用错误：LoanRecordDAO 不支持 Title 查询");
-
             }
         }
+
         query.prepare(sql);
+
+        // 参数绑定
+        bool needDateBinding = false; // 探测是否需要绑定日期
+
         for (int i = 0; i < filter.size(); i++) {
             switch (filter[i]) {
             case Filter::ISBN:
@@ -868,20 +875,29 @@ public:
             case Filter::BorrowerID:
                 query.bindValue(":borrowerid", queryrecord.c_BorrowerID().qs_Value()); break;
             case Filter::IsReturned:
-                query.bindValue(":isreturned", queryrecord.b_IsReturned()); break;
+                query.bindValue(":isreturned", queryrecord.b_IsReturned() ? 1 : 0); break;
             case Filter::IsOverdue:
-                query.bindValue(":isoverdue", queryrecord.b_IsOverdue()); break;
-            // 日期类的赋值需要转换为 ISO 8601 标准字符串，防止驱动层面的隐式时区转换
+                query.bindValue(":isoverdue", queryrecord.b_IsOverdue() ? 1 : 0); break;
+
             case Filter::BorrowDate:
-                query.bindValue(":borrowdate", queryrecord.qd_BorrowDate().toString(Qt::ISODate)); break;
             case Filter::DueDate:
-                query.bindValue(":duedate", queryrecord.qd_DueDate().toString(Qt::ISODate)); break;
             case Filter::ReturnDate:
-                query.bindValue(":returndate", queryrecord.qd_ReturnDate().toString(Qt::ISODate)); break;
+                needDateBinding = true; // 标记需要绑定日期
+                break;
             }
         }
+
+        // 注入时间区间
+        if (needDateBinding) {
+            if (!startDate.isValid() || !endDate.isValid() || startDate >= endDate) {
+                return ErrorCode::ILLEGAL_INPUT; // 阻断非法区间
+            }
+            query.bindValue(":startdate", startDate.toString(Qt::ISODate));
+            query.bindValue(":enddate", endDate.toString(Qt::ISODate));
+        }
+
         if (!query.exec()) {
-            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询流水失败", query.lastError());
         }
 
         QSqlRecord record = query.record();
@@ -1008,4 +1024,153 @@ public:
 
         return ErrorCode::SUCCESS;
     }
+
+    // 含条件地统计指定时间区间内指定图书或用户或状态的借阅总数
+    // 参数 startDate 为起始日（包含），endDate 为结束日（不包含）
+    [[nodiscard]] ErrorCode getLoanCountbyFilter(const QDate& startDate, const QDate& endDate, int& outCount, const QList<Filter>& filter, const LoanRecord& queryrecord) const
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行统计");
+        }
+
+        // 初始化输出值，防止脏数据
+        outCount = 0;
+
+        // 确保区间左闭右开逻辑合法
+        if (!startDate.isValid() || !endDate.isValid() || startDate >= endDate) {
+            return ErrorCode::ILLEGAL_INPUT;
+        }
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        QString sql = "SELECT COUNT(RecordID) FROM LoanRecord WHERE BorrowDate >= :startdate AND BorrowDate < :enddate ";
+        for (int i = 0; i < filter.size(); i++) {
+            switch (filter[i]) {
+            case Filter::ISBN:
+                sql += "AND ISBN = :isbn "; break;
+            case Filter::BorrowerID:
+                sql += "AND BorrowerID = :borrowerid "; break;
+            case Filter::IsReturned:
+                sql += "AND IsReturned = :isreturned "; break;
+            case Filter::IsOverdue:
+                sql += "AND IsOverdue = :isoverdue "; break;
+            default:
+                throw DatabaseException(ErrorCode::ILLEGAL_INPUT, "底层调用错误：非法的查询条件");
+
+            }
+        }
+        query.prepare(sql);
+        for (int i = 0; i < filter.size(); i++) {
+            switch (filter[i]) {
+            case Filter::ISBN:
+                query.bindValue(":isbn", queryrecord.c_ISBN().qs_Value()); break;
+            case Filter::BorrowerID:
+                query.bindValue(":borrowerid", queryrecord.c_BorrowerID().qs_Value()); break;
+            case Filter::IsReturned:
+                query.bindValue(":isreturned", queryrecord.b_IsReturned()); break;
+            case Filter::IsOverdue:
+                query.bindValue(":isoverdue", queryrecord.b_IsOverdue()); break;
+            }
+        }
+
+        // 强制转换为 ISO 8601 标准字符串进行比对
+        query.bindValue(":startdate", startDate.toString(Qt::ISODate));
+        query.bindValue(":enddate", endDate.toString(Qt::ISODate));
+
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "执行统计失败", query.lastError());
+        }
+
+        if (query.next()) {
+            outCount = query.value(0).toInt();
+            return ErrorCode::SUCCESS;
+        }
+
+        return ErrorCode::NO_RESULT;
+    }
+
+    // 获取热门借阅图书排行 (TOP N)
+    // 返回 QPair 列表，first 为 ISBN，second 为该书的总借阅次数
+    [[nodiscard]] ErrorCode getTopPopularBooks(int limit, QList<QPair<QString, int>>& results) const
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行排行查询");
+        }
+
+        results.clear(); // 清空容器
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 计算下推核心 SQL：分组统计 -> 降序排列 -> 限制数量
+        query.prepare(R"(
+            SELECT ISBN, COUNT(RecordID) AS BorrowCount 
+            FROM LoanRecord 
+            GROUP BY ISBN 
+            ORDER BY BorrowCount DESC 
+            LIMIT :limit
+        )");
+
+        query.bindValue(":limit", limit);
+
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "执行热门图书排序失败", query.lastError());
+        }
+
+        while (query.next()) {
+            // value(0) 为 ISBN, value(1) 为借阅次数
+            results.append(qMakePair(query.value(0).toString(), query.value(1).toInt()));
+        }
+
+        if (results.isEmpty()) {
+            return ErrorCode::NO_RESULT;
+        }
+
+        return ErrorCode::SUCCESS;
+    }
+
+    // 获取读者借阅量排行 (TOP N)
+    // 返回 QPair 列表，first 为 ISBN，second 为该书的总借阅次数
+    [[nodiscard]] ErrorCode getTopReaders(int limit, QList<QPair<QString, int>>& results) const
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行排行查询");
+        }
+
+        results.clear(); // 清空容器
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 计算下推核心 SQL：分组统计 -> 降序排列 -> 限制数量
+        query.prepare(R"(
+            SELECT BorrowerID, COUNT(RecordID) AS BorrowCount 
+            FROM LoanRecord 
+            GROUP BY BorrowerID 
+            ORDER BY BorrowCount DESC 
+            LIMIT :limit
+        )");
+
+        query.bindValue(":limit", limit);
+
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "执行排序失败", query.lastError());
+        }
+
+        while (query.next()) {
+            // value(0) 为 ISBN, value(1) 为借阅次数
+            results.append(qMakePair(query.value(0).toString(), query.value(1).toInt()));
+        }
+
+        if (results.isEmpty()) {
+            return ErrorCode::NO_RESULT;
+        }
+
+        return ErrorCode::SUCCESS;
+    }
+
 };

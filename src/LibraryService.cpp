@@ -1,16 +1,5 @@
 ﻿//图书业务
-#pragma once
 #include "header/TypeCode.h"
 #include "header/DataTemplates.h"
-class QueryRequest {
-
-};
-class EditRequest {
-
-};
-class StatService {
-
-};
-class BookService {
-
-};
+#include "header/DataException.h"
+#include "header/DatabaseManager.h"
