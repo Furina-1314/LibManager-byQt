@@ -1,4 +1,4 @@
-﻿//错误码
+﻿//状态码
 #pragma once
 enum class Availability //可用状态
 {
@@ -28,7 +28,8 @@ enum  class ErrorCode //错误代码
 	//用户相关错误
 	USERID_NOT_EXIST = 1000,//用户名不存在
 	WRONG_PASSWORD = 1001,//密码错误
-	ACCOUNT_ALREADY_EXIST = 1002,//账户已存在
+	WRONG_USERID = 1002,//ID错误
+	ACCOUNT_ALREADY_EXIST = 1003,//账户已存在
 	NO_ACCESS = 1004,//无权限
 	ACCOUNT_INVALID = 1005,//不可用的账户
 	EMPTY_USERNAME = 1006,//空用户名
@@ -87,4 +88,16 @@ enum class Auth //用户身份
 	Illegal = -1,
 	Reader = 1,//读者
 	Admin = 2//管理员
+};
+enum class Filter //借阅流水的搜寻条件
+{
+	ISBN = 1,
+	VolID = 2,
+	Title = 3,
+	BorrowerID = 4,
+	IsReturned = 5,
+	IsOverdue = 6,
+	BorrowDate = 7,
+	DueDate = 8,
+	ReturnDate = 9
 };

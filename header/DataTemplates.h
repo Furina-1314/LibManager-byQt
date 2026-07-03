@@ -256,17 +256,20 @@ private:
 	UserID BorrowerID;//借阅者ID
 	bool IsReturned;//是否已归还，默认为1（已归还）
 	bool IsOverdue;//是否已逾期，默认为0（未逾期）
-	QDate LoanDate;//借书日期
+	QDate BorrowDate;//借书日期
 	QDate DueDate;//应还日期
 	QDate ReturnDate;//归还日期
 public:
 	LoanRecord(bool b = true, bool bb=false,QDate c = QDate(), QDate d = QDate(), QDate e = QDate()) :
-		IsReturned(b), IsOverdue(bb), LoanDate(c), DueDate(d), ReturnDate(e) {}
+		IsReturned(b), IsOverdue(bb), BorrowDate(c), DueDate(d), ReturnDate(e) {}
 	//Getter
 	long long int lli_RecordID() const { return RecordID; }
+	const ISBN& c_ISBN() const { return BookISBN; }
+	const VolumeID& c_VolID() const { return VolID; }
+	const UserID& c_BorrowerID() const { return BorrowerID; }
 	bool b_IsReturned() const { return IsReturned; }
 	bool b_IsOverdue() const { return IsOverdue; }
-	const QDate& qd_LoanDate() const { return LoanDate; }
+	const QDate& qd_BorrowDate() const { return BorrowDate; }
 	const QDate& qd_DueDate() const { return DueDate; }
 	const QDate& qd_ReturnDate() const { return ReturnDate; }
 	//Setter
@@ -283,7 +286,7 @@ public:
 	[[nodiscard]] ErrorCode SetBorrowerID(const UserID& id) {
 		return BorrowerID.SetValue(id.qs_Value());
 	}
-	void SetLoanDate(const QDate& d) { LoanDate = d; }
+	void SetBorrowDate(const QDate& d) { BorrowDate = d; }
 	void SetDueDate(const QDate& d) { DueDate = d; }
 	void SetReturnDate(const QDate& d) { ReturnDate = d; }
 	void SetIsReturned(bool b) { IsReturned = b; }
@@ -321,10 +324,10 @@ public:
 		if (in<0) { return ErrorCode::ILLEGAL_INPUT; }
 		else { BorrowLimit=in; return ErrorCode::SUCCESS; }
 	}
-	[[nodiscard]] ErrorCode SetSalt(QByteArray in) {
+	[[nodiscard]] ErrorCode SetSalt(const QByteArray& in) {
 		Salt = in; return ErrorCode::SUCCESS;
 	}
-	[[nodiscard]] ErrorCode SetPasswordHash(QByteArray in) {
+	[[nodiscard]] ErrorCode SetPasswordHash(const QByteArray& in) {
 		PasswordHash = in; return ErrorCode::SUCCESS;
 	}
 	// 密码设值（存储Hash）

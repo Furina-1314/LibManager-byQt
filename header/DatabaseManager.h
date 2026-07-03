@@ -219,7 +219,7 @@ public:
         }
 
         if (query.next()) {
-            if (query.value(0).toInt() > 0) return ErrorCode::SUCCESS;
+            if (query.value(0).toInt() > 0) return ErrorCode::ACCOUNT_ALREADY_EXIST;
             else return ErrorCode::USERID_NOT_EXIST;
         }
     }
@@ -373,6 +373,7 @@ public:
 
         return ErrorCode::SUCCESS;
     }
+
     [[nodiscard]] ErrorCode updateAdminInfo(const AdminAccount& in) const// 更新管理员信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
@@ -421,8 +422,8 @@ public:
 // 图书DAO
 class BookDAO {// 图书类DAO
 public:
-    // 查询图书接口
-    [[nodiscard]] ErrorCode getBookInfo(const QString& ISBN, QList<Book>& results) const // 查询图书信息
+    // 查询图书接口--ISBN查询
+    [[nodiscard]] ErrorCode getBookInfobyISBN(const QString& ISBN, QList<Book>& results) const // 查询图书信息
     {
         QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
         if (!db.isValid() || !db.isOpen()) {
@@ -492,6 +493,95 @@ public:
         // 正常执行流的返回值
         return ErrorCode::SUCCESS;
     }
+
+    // 查询图书接口--书名模糊查询
+    [[nodiscard]] ErrorCode getBookInfobyTitle(const QList<QString>& keywords, QList<Book>& results) const
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
+        }
+        // 确保传出的容器初始状态干净
+        results.clear();
+
+        if (keywords.isEmpty()) {
+            return ErrorCode::EMPTY_INPUT;
+        }
+
+        // 查询 Book 基础信息
+        QString sql = "SELECT * FROM Book WHERE 1=1";
+        for (int i = 0; i < keywords.size(); i++) {
+            // 使用动态占位符防止覆盖
+            sql += QString(" AND Title LIKE :kw%1").arg(i);
+        }
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+        query.prepare(sql);
+
+        // 绑定通配符变量
+        for (int i = 0; i < keywords.size(); ++i) {
+            query.bindValue(QString(":kw%1").arg(i), "%" + keywords[i] + "%");
+        }
+
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
+        }
+
+        QSqlRecord record = query.record();
+        int idxISBN = record.indexOf("ISBN");
+        int idxTitle = record.indexOf("Title");
+        int idxPress = record.indexOf("Press");
+        int idxLanguage = record.indexOf("Language");
+        int idxPubYear = record.indexOf("PubYear");
+        int idxCategory = record.indexOf("Category");
+        int idxIntroduction = record.indexOf("Introduction");
+
+        // 检查字段映射是否断裂
+        if (idxISBN == -1 || idxTitle == -1) {
+            throw DatabaseException(ErrorCode::SYSTEM_ERROR, "底层 SQL 字段映射异常");
+        }
+
+        // 预编译之后 Authors 的查询
+        QSqlQuery query2(db);
+        query2.setForwardOnly(true);
+        query2.prepare("SELECT * FROM Authors WHERE ISBN = :input ORDER BY AuthorOrder ASC");
+
+        while (query.next()) {
+            // 查询Authors
+            query2.bindValue(":input", query.value(idxISBN).toString());
+            if (!query2.exec()) {
+                throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query2.lastError());
+            }
+            QSqlRecord record2 = query2.record();
+            int idxAuthorName = record2.indexOf("AuthorName");
+            QList<QString> authors;
+            while (query2.next()) {
+                authors.append(query2.value(idxAuthorName).toString());
+            }
+
+            Book book;
+            book.SetISBN(query.value(idxISBN).toString());
+            book.SetName(query.value(idxTitle).toString());
+            book.SetPress(query.value(idxPress).toString());
+            book.SetPubYear(query.value(idxPubYear).toInt());
+            book.SetPubCategory(static_cast<Category>(query.value(idxCategory).toInt()));
+            book.SetPubLanguage(static_cast<Language>(query.value(idxLanguage).toInt()));
+            book.SetIntroduction(query.value(idxIntroduction).toString());
+            book.SetAuthor(authors);
+
+            results.append(book);
+        }
+
+        // 根据结果集容量判定状态
+        if (results.isEmpty()) {
+            return ErrorCode::NO_RESULT;
+        }
+        // 正常执行流的返回值
+        return ErrorCode::SUCCESS;
+    }
+
+    // 查询单册接口（ VolumeList 为 Book 成员，故不需传入 QList ）
     [[nodiscard]] ErrorCode getVolumeInfo(Book& querybook) const // 查询单册信息
     {
         QList<Volume> results;
@@ -503,8 +593,9 @@ public:
         // 查询Volume
         QSqlQuery query(db);
         query.setForwardOnly(true);
+
         // 带过滤约束的查询
-        query.prepare("SELECT * FROM Volume WHERE ISBN = :input");
+        query.prepare("SELECT v.*, l.* FROM Volume v LEFT JOIN VolLocation l ON v.ISBN = l.ISBN AND v.VolID = l.VolID WHERE v.ISBN = :input");
         query.bindValue(":input", querybook.c_BookISBN().qs_Value());
         if (!query.exec()) {
             throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
@@ -515,6 +606,11 @@ public:
         int idxVolNote = record.indexOf("VolNote");
         int idxVolAvailability = record.indexOf("VolAvailability");
         int idxVolIsOpenshelf = record.indexOf("VolIsOpenshelf");
+        int idxLib = record.indexOf("Lib");
+        int idxFloor = record.indexOf("Floor");
+        int idxArea = record.indexOf("Area");
+        int idxShelf = record.indexOf("Shelf");
+        int idxLayer = record.indexOf("Layer");
 
         // 检查字段映射是否断裂
         if (idxVolID == -1) {
@@ -524,9 +620,15 @@ public:
         while (query.next()) {
             Volume  volume;
             VolumeID temp;
-
+            BookLocation loc_tmp;
             temp.SetValue(query.value(idxVolID).toString());
+            loc_tmp.libraryID = static_cast<Library>(query.value(idxLib).toInt());
+            loc_tmp.floor = query.value(idxFloor).toInt();
+            loc_tmp.areaID = static_cast<Area>(query.value(idxArea).toInt());
+            loc_tmp.shelf = query.value(idxShelf).toInt();
+            loc_tmp.layer = query.value(idxLayer).toInt();
 
+            volume.SetLocation(loc_tmp);
             volume.SetVolID(temp);
             volume.SetNote(query.value(idxVolNote).toString());
             volume.SetAvailability(static_cast<Availability>(query.value(idxVolAvailability).toInt()));
@@ -637,8 +739,9 @@ public:
             throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开");
         }
         QSqlQuery query(db);
+        QSqlQuery query2(db);
         query.setForwardOnly(true);
-
+        query2.setForwardOnly(true);
         // 利用事务保证若干本单册的更新状态同步
         if (!db.transaction()) {
             throw DatabaseException(ErrorCode::DATABASE_ERROR, "无法开启数据库事务");
@@ -656,6 +759,16 @@ public:
                 VolAvailability = excluded.VolAvailability,
                 VolIsOpenshelf = excluded.VolIsOpenshelf
         )");
+            query2.prepare(R"(
+            INSERT INTO VolLocation (VolID, ISBN, Lib, Floor, Area, Shelf, Layer) 
+            VALUES (:volid, :isbn, :lib, :floor, :area, :shelf, :layer)
+            ON CONFLICT(ISBN, VolID) DO UPDATE SET 
+                Lib = excluded.Lib,
+                Floor = excluded.Floor,
+                Area = excluded.Area,
+                Shelf = excluded.Shelf,
+                Layer = excluded.Layer
+        )");
 
             // 数据装配与类型强转
             // 更新 Volume 表
@@ -667,11 +780,23 @@ public:
                 query.bindValue(":volnote", temp[i].qs_Note());
                 query.bindValue(":volavailability", static_cast<int>(temp[i].enum_IsAvailable()));
                 query.bindValue(":volisopenshelf", temp[i].b_IsOpenshelf());
-
                 // 执行并捕获异常
                 if (!query.exec()) {
-                    throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册数据失败", query.lastError());
+                    throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册基本数据失败", query.lastError());
                 }
+
+                query2.bindValue(":volid", temp[i].c_VolID().qs_Value());
+                query2.bindValue(":isbn", in.c_BookISBN().qs_Value());
+                query2.bindValue(":lib", static_cast<int>(temp[i].stct_Location().libraryID));
+                query2.bindValue(":floor", temp[i].stct_Location().floor);
+                query2.bindValue(":area", static_cast<int>(temp[i].stct_Location().areaID));
+                query2.bindValue(":shelf", temp[i].stct_Location().shelf);
+                query2.bindValue(":layer", temp[i].stct_Location().layer);
+                // 执行并捕获异常
+                if (!query2.exec()) {
+                    throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册位置数据失败", query2.lastError());
+                }
+
             }
 
             // 提交事务
@@ -689,4 +814,198 @@ public:
         }
     }
 
+};
+
+class LoanRecordDAO {
+public:
+
+    // 查询流水接口
+    [[nodiscard]] ErrorCode getLoanRecord(const LoanRecord& queryrecord, const QList<Filter>& filter, QList<LoanRecord>& results) const // 基于 Filter 查询流水信息
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
+        }
+
+        results.clear();
+        // 查询Volume
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 带过滤约束的查询
+        QString sql = "SELECT * FROM LoanRecord WHERE 1 = 1 ";
+        for (int i = 0; i < filter.size(); i++) {
+            switch (filter[i]) {
+            case Filter::ISBN:
+                sql += "AND ISBN = :isbn "; break;
+            case Filter::VolID:
+                sql += "AND VolID = :volid "; break;
+            case Filter::BorrowerID:
+                sql += "AND BorrowerID = :borrowerid "; break;
+            case Filter::IsReturned:
+                sql += "AND IsReturned = :isreturned "; break;
+            case Filter::IsOverdue:
+                sql += "AND IsOverdue = :isoverdue "; break;
+            case Filter::BorrowDate:
+                sql += "AND date(BorrowDate) = :borrowdate"; break;
+            case Filter::DueDate:
+                sql += "AND date(DueDate) = :duedate"; break;
+            case Filter::ReturnDate:
+                sql += "AND date(ReturnDate) = :returndate"; break;  // 注意：针对未归还的记录，查询应使用 IsReturned 。
+            // 借阅流水不支持书名模糊查询，应当得到图书的ISBN后利用ISBN查询
+            case Filter::Title:
+                throw DatabaseException(ErrorCode::ILLEGAL_INPUT, "底层调用错误：LoanRecordDAO 不支持 Title 查询");
+
+            }
+        }
+        query.prepare(sql);
+        for (int i = 0; i < filter.size(); i++) {
+            switch (filter[i]) {
+            case Filter::ISBN:
+                query.bindValue(":isbn", queryrecord.c_ISBN().qs_Value()); break;
+            case Filter::VolID:
+                query.bindValue(":volid", queryrecord.c_VolID().qs_Value()); break;
+            case Filter::BorrowerID:
+                query.bindValue(":borrowerid", queryrecord.c_BorrowerID().qs_Value()); break;
+            case Filter::IsReturned:
+                query.bindValue(":isreturned", queryrecord.b_IsReturned()); break;
+            case Filter::IsOverdue:
+                query.bindValue(":isoverdue", queryrecord.b_IsOverdue()); break;
+            // 日期类的赋值需要转换为 ISO 8601 标准字符串，防止驱动层面的隐式时区转换
+            case Filter::BorrowDate:
+                query.bindValue(":borrowdate", queryrecord.qd_BorrowDate().toString(Qt::ISODate)); break;
+            case Filter::DueDate:
+                query.bindValue(":duedate", queryrecord.qd_DueDate().toString(Qt::ISODate)); break;
+            case Filter::ReturnDate:
+                query.bindValue(":returndate", queryrecord.qd_ReturnDate().toString(Qt::ISODate)); break;
+            }
+        }
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
+        }
+
+        QSqlRecord record = query.record();
+        int idxRecordID = record.indexOf("RecordID");
+        int idxISBN = record.indexOf("ISBN");
+        int idxVolID = record.indexOf("VolID");
+        int idxBorrowerID = record.indexOf("BorrowerID");
+        int idxIsReturned = record.indexOf("IsReturned");
+        int idxIsOverdue = record.indexOf("IsOverdue");
+        int idxBorrowDate = record.indexOf("BorrowDate");
+        int idxDueDate = record.indexOf("DueDate");
+        int idxReturnDate = record.indexOf("ReturnDate");
+
+        // 检查字段映射是否断裂
+        if (idxRecordID == -1 || idxISBN == -1 || idxVolID == -1) {
+            throw DatabaseException(ErrorCode::SYSTEM_ERROR, "底层 SQL 字段映射异常");
+        }
+
+        while (query.next()) {
+            LoanRecord loanrecord;
+            ISBN isbn_tmp;
+            VolumeID volid_tmp;
+            UserID userid_tmp;
+
+            loanrecord.SetRecordID(query.value(idxRecordID).toLongLong());
+
+            isbn_tmp.SetValue(query.value(idxISBN).toString());
+            loanrecord.SetBookISBN(isbn_tmp);
+
+            volid_tmp.SetValue(query.value(idxVolID).toString());
+            loanrecord.SetVolumeID(volid_tmp);
+
+            userid_tmp.SetValue(query.value(idxBorrowerID).toString());
+            loanrecord.SetBorrowerID(userid_tmp);
+
+            loanrecord.SetIsReturned(query.value(idxIsReturned).toBool());
+            loanrecord.SetIsOverdue(query.value(idxIsOverdue).toBool());
+
+            // 日期的格式化赋值
+            loanrecord.SetBorrowDate(query.value(idxBorrowDate).toDate());
+            loanrecord.SetDueDate(query.value(idxDueDate).toDate());
+
+            // ReturnDate 的非空探测
+            QVariant returnDateVar = query.value(idxReturnDate);
+            if (!returnDateVar.isNull() && returnDateVar.isValid()) {
+                loanrecord.SetReturnDate(returnDateVar.toDate());
+            }
+
+            results.append(loanrecord);
+
+        }
+
+        // 根据结果集容量判定状态
+        if (results.isEmpty()) {
+            return ErrorCode::NO_RESULT;
+        }
+        // 正常执行流的返回值
+        return ErrorCode::SUCCESS;
+    }
+
+    // 通过 RecordID 定位，实现借阅流水的增或改
+    [[nodiscard]] ErrorCode updateLoanRecord(const LoanRecord& in) const // 更新或插入借阅流水
+    {
+        QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+        if (!db.isValid() || !db.isOpen()) {
+            throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开");
+        }
+
+        QSqlQuery query(db);
+        query.setForwardOnly(true);
+
+        // 使用 ON CONFLICT 实现 Upsert
+        // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
+        query.prepare(R"(
+            INSERT INTO LoanRecord (
+                RecordID, ISBN, VolID, BorrowerID, IsReturned, IsOverdue, BorrowDate, DueDate, ReturnDate
+            ) VALUES (
+                :recordid, :isbn, :volid, :borrowerid, :isreturned, :isoverdue, :borrowdate, :duedate, :returndate
+            )
+            ON CONFLICT(RecordID) DO UPDATE SET 
+                ISBN = excluded.ISBN,
+                VolID = excluded.VolID,
+                BorrowerID = excluded.BorrowerID,
+                IsReturned = excluded.IsReturned,
+                IsOverdue = excluded.IsOverdue,
+                BorrowDate = excluded.BorrowDate,
+                DueDate = excluded.DueDate,
+                ReturnDate = excluded.ReturnDate
+        )");
+
+        // 自增主键的 NULL 映射
+        // 若 RecordID 为默认的非法值（<=0），则绑定底层的 NULL，这会触发 SQLite 分配自增 ID 且不引发冲突
+        // 若 RecordID 存在，则绑定实际值，若发生冲突则自动转入 UPDATE 流程
+        if (in.lli_RecordID() <= 0) {
+            query.bindValue(":recordid", QVariant(QVariant::LongLong));
+        }
+        else {
+            query.bindValue(":recordid", in.lli_RecordID());
+        }
+
+        // 数据装配与类型严谨强转
+        query.bindValue(":isbn", in.c_ISBN().qs_Value());
+        query.bindValue(":volid", in.c_VolID().qs_Value());
+        query.bindValue(":borrowerid", in.c_BorrowerID().qs_Value());
+        query.bindValue(":isreturned", in.b_IsReturned() ? 1 : 0);
+        query.bindValue(":isoverdue", in.b_IsOverdue() ? 1 : 0);
+
+        // 日期的 ISO 8601 标准化转换
+        query.bindValue(":borrowdate", in.qd_BorrowDate().toString(Qt::ISODate));
+        query.bindValue(":duedate", in.qd_DueDate().toString(Qt::ISODate));
+
+        // ReturnDate 的 NULL 态安全处理
+        if (in.qd_ReturnDate().isValid()) {
+            query.bindValue(":returndate", in.qd_ReturnDate().toString(Qt::ISODate));
+        }
+        else {
+            query.bindValue(":returndate", QVariant(QVariant::String));
+        }
+
+        // 执行并捕获异常
+        if (!query.exec()) {
+            throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存借阅流水数据失败", query.lastError());
+        }
+
+        return ErrorCode::SUCCESS;
+    }
 };
