@@ -375,6 +375,7 @@ CMakeFiles/appLibManager.dir/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.rcc/qml
  F:/Qt/6.11.1/mingw_64/include/QtCore/qdeadlinetimer.h \
  F:/Qt/6.11.1/mingw_64/include/QtCore/qnativeinterface.h \
  F:/Qt/6.11.1/mingw_64/include/QtCore/qcoreapplication_platform.h \
+ F:/Qt/6.11.1/mingw_64/include/QtCore/qloggingcategory.h \
  F:/Qt/6.11.1/mingw_64/include/QtCore/qtimezone.h \
  F:/Qt/6.11.1/mingw_64/include/QtQml/qjsengine.h \
  F:/Qt/6.11.1/mingw_64/include/QtQml/qjsmanagedvalue.h \

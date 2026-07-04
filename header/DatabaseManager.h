@@ -595,7 +595,20 @@ public:
         query.setForwardOnly(true);
 
         // 带过滤约束的查询
-        query.prepare("SELECT v.*, l.* FROM Volume v LEFT JOIN VolLocation l ON v.ISBN = l.ISBN AND v.VolID = l.VolID WHERE v.ISBN = :input");
+        query.prepare(R"(
+          SELECT 
+             v.*, 
+             loc.*, 
+             lr.BorrowerID AS ActiveBorrower, 
+             lr.DueDate AS ActiveDueDate
+        FROM Volume v 
+        LEFT JOIN VolLocation loc 
+             ON v.ISBN = loc.ISBN AND v.VolID = loc.VolID 
+        LEFT JOIN LoanRecord lr 
+            -- 约束：仅挂载当前尚未归还的那一条活跃流水
+            ON v.ISBN = lr.ISBN AND v.VolID = lr.VolID AND lr.IsReturned = 0 
+        WHERE v.ISBN = :input
+        )");
         query.bindValue(":input", querybook.c_BookISBN().qs_Value());
         if (!query.exec()) {
             throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
@@ -611,9 +624,11 @@ public:
         int idxArea = record.indexOf("Area");
         int idxShelf = record.indexOf("Shelf");
         int idxLayer = record.indexOf("Layer");
+        int idxActiveBorrower = record.indexOf("ActiveBorrower");
+        int idxActiveDueDate = record.indexOf("ActiveDueDate");
 
         // 检查字段映射是否断裂
-        if (idxVolID == -1) {
+        if (idxVolID == -1 || idxActiveBorrower == -1) {
             throw DatabaseException(ErrorCode::SYSTEM_ERROR, "底层 SQL 字段映射异常");
         }
 
@@ -633,6 +648,22 @@ public:
             volume.SetNote(query.value(idxVolNote).toString());
             volume.SetAvailability(static_cast<Availability>(query.value(idxVolAvailability).toInt()));
             volume.SetIsOpenshelf(query.value(idxVolIsOpenshelf).toInt());
+
+            // 当查询到某本单册时，探测其是否被外借挂载
+            QVariant borrowerVar = query.value(idxActiveBorrower);
+            if (!borrowerVar.isNull()) {
+                UserID uid;
+                uid.SetValue(borrowerVar.toString());
+                volume.SetBorrowerID(uid);
+                volume.SetDueDate(query.value(idxActiveDueDate).toDate());
+            }
+            else {
+                // 单册当前在馆，清空内存状态，确保唯一真相源
+                UserID emptyUid;
+                volume.SetBorrowerID(emptyUid);
+                volume.SetDueDate(QDate()); // 设为无效日期
+            }
+
             results.append(volume);
         }
 

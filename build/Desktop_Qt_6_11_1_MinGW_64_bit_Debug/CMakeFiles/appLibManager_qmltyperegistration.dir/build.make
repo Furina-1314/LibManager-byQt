@@ -77,6 +77,8 @@ applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6netwo
 applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6quick_metatypes.json
 applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6gui_metatypes.json
 applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6opengl_metatypes.json
+applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6widgets_metatypes.json
+applibmanager_qmltyperegistrations.cpp: F:/Qt/6.11.1/mingw_64/metatypes/qt6sql_metatypes.json
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=E:\code\LibManager\build\Desktop_Qt_6_11_1_MinGW_64_bit_Debug\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic QML type registration for target appLibManager"
 	call .qt\bin\qt_setup_tool_path.bat F:/Qt/6.11.1/mingw_64/bin/qmltyperegistrar.exe --generate-qmltypes=E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/LibManager/appLibManager.qmltypes --import-name=LibManager --major-version=254 --minor-version=254 @E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/qmltypes/appLibManager_foreign_types.txt -o E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/applibmanager_qmltyperegistrations.cpp E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/meta_types/qt6applibmanager_metatypes.json
 	F:\Qt\Tools\CMake_64\bin\cmake.exe -E make_directory E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/.qt/qmltypes
@@ -101,6 +103,7 @@ meta_types/appLibManager_json_file_list.txt: appLibManager_autogen/timestamp
 	F:\Qt\6.11.1\mingw_64\bin\cmake_automoc_parser.exe --cmake-autogen-cache-file E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/CMakeFiles/appLibManager_autogen.dir/ParseCache.txt --cmake-autogen-info-file E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/CMakeFiles/appLibManager_autogen.dir/AutogenInfo.json --output-file-path E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/meta_types/appLibManager_json_file_list.txt --timestamp-file-path E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/meta_types/appLibManager_json_file_list.txt.timestamp --cmake-autogen-include-dir-path E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/appLibManager_autogen/include
 
 appLibManager_autogen/timestamp: F:/Qt/6.11.1/mingw_64/bin/moc.exe
+appLibManager_autogen/timestamp: F:/Qt/6.11.1/mingw_64/bin/uic.exe
 appLibManager_autogen/timestamp: CMakeFiles/appLibManager_qmltyperegistration.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=E:\code\LibManager\build\Desktop_Qt_6_11_1_MinGW_64_bit_Debug\CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Automatic MOC and UIC for target appLibManager"
 	F:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug/CMakeFiles/appLibManager_autogen.dir/AutogenInfo.json Debug

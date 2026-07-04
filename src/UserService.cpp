@@ -4,16 +4,18 @@
 #include "header/DataException.h"
 #include "header/DatabaseManager.h"
 
+// 利用重载实现对不同身份用户的支持
+
 class PasswordCheck {// 密码检查服务
 public:
 	// Reader 的密码检查
-	[[nodiscard]] static ErrorCode ReaderPasswordCheck(const QString& passwd, const ReaderAccount& check) {
+	[[nodiscard]] static ErrorCode UserPasswordCheck(const QString& passwd, const ReaderAccount& check) {
 		QByteArray combined = passwd.toUtf8() + check.qba_Salt();
 		if (QCryptographicHash::hash(combined, QCryptographicHash::Sha3_512) != check.qba_PasswordHash())	return ErrorCode::WRONG_PASSWORD;
 		else return ErrorCode::SUCCESS;
 	}
 	// Admin 的密码检查
-	[[nodiscard]] static ErrorCode AdminPasswordCheck(const QString& passwd, const AdminAccount& check) {
+	[[nodiscard]] static ErrorCode UserPasswordCheck(const QString& passwd, const AdminAccount& check) {
 		QByteArray combined = passwd.toUtf8() + check.qba_Salt();
 		if (QCryptographicHash::hash(combined, QCryptographicHash::Sha3_512) != check.qba_PasswordHash())	return ErrorCode::WRONG_PASSWORD;
 		else return ErrorCode::SUCCESS;
@@ -23,7 +25,7 @@ public:
 
 class Login {// 登录服务
 public:
-	[[nodiscard]] ErrorCode ReaderLogin(ReaderAccount& in, const QString& passwd) const {// Reader 使用ID登录
+	[[nodiscard]] static ErrorCode UserLogin(ReaderAccount& in, const QString& passwd) {// Reader 使用ID登录
 		AccountDAO acDAO;
 		QList<ReaderAccount> check;
 		ErrorCode tmp = acDAO.isUserExists(in.c_ID().qs_Value());
@@ -41,14 +43,14 @@ public:
 		if (check[0].b_IsValid() == false)	return ErrorCode::ACCOUNT_INVALID;
 
 		// 密码检查
-		ErrorCode pwdStatus = PasswordCheck::ReaderPasswordCheck(passwd, check[0]);
+		ErrorCode pwdStatus = PasswordCheck::UserPasswordCheck(passwd, check[0]);
 		if (pwdStatus == ErrorCode::SUCCESS) {
 			in = check[0]; // 将查出的完整记录回写给内存引用
 		}
 		return pwdStatus;
 	}
 
-	[[nodiscard]] ErrorCode AdminLogin(AdminAccount& in, const QString& passwd) const {// Admin 使用ID登录
+	[[nodiscard]] static ErrorCode UserLogin(AdminAccount& in, const QString& passwd) {// Admin 使用ID登录
 		AccountDAO acDAO;
 		QList<AdminAccount> check;
 		ErrorCode tmp = acDAO.isUserExists(in.c_ID().qs_Value());
@@ -66,7 +68,7 @@ public:
 		if (check[0].b_IsValid() == false)	return ErrorCode::ACCOUNT_INVALID;
 
 		// 密码检查
-		ErrorCode pwdStatus = PasswordCheck::AdminPasswordCheck(passwd, check[0]);
+		ErrorCode pwdStatus = PasswordCheck::UserPasswordCheck(passwd, check[0]);
 		if (pwdStatus == ErrorCode::SUCCESS) {
 			// 将查出的完整记录回写给内存引用
 			// AdminAccount 中有常量成员，不允许使用 "=" 赋值
@@ -82,7 +84,8 @@ public:
 
 class Register {// Reader 注册
 public:
-	[[nodiscard]] ErrorCode UserRegister(const UserID& id, const QString& name, QString& passwd, QString& confirmpasswd, const Auth role) {
+
+	[[nodiscard]] static ErrorCode UserRegister(const UserID& id, const QString& name, const QString& passwd, const QString& confirmpasswd, const Auth role) {
 
 		// Reader 注册
 		if (role == Auth::Reader) {
@@ -119,8 +122,9 @@ public:
 };
 
 class Unregister {// 注销服务，采取软删除的方式
+public:
 
-	[[nodiscard]] ErrorCode ReaderUnregister(const ReaderAccount& in, const QString& passwd) const {// Reader 注销自己的账户，需要输入密码以确认操作
+	[[nodiscard]] static ErrorCode UserUnregister(const ReaderAccount& in, const QString& passwd) {// Reader 注销自己的账户，需要输入密码以确认操作
 		AccountDAO acDAO;
 		QList<ReaderAccount> check;
 		ErrorCode tmp = acDAO.isUserExists(in.c_ID().qs_Value());
@@ -137,7 +141,7 @@ class Unregister {// 注销服务，采取软删除的方式
 		// 检验有效性
 		if (check[0].b_IsValid() == false)	return ErrorCode::ACCOUNT_INVALID;// 用户已不可用
 		// 密码检查
-		if (PasswordCheck::ReaderPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
+		if (PasswordCheck::UserPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
 			return ErrorCode::WRONG_PASSWORD;
 		}
 
@@ -155,15 +159,16 @@ class Unregister {// 注销服务，采取软删除的方式
 	}
 
 	// Admin 不允许自行注销
-	[[nodiscard]] ErrorCode AdminUnregister(const AdminAccount& in) {
+	[[nodiscard]] static ErrorCode UserUnregister(const AdminAccount& in) {
 		return ErrorCode::NO_ACCESS;
 	}
 };
 
 class EditProfile {//编辑个人资料
+public:
 
 	// Reader 更新用户名
-	[[nodiscard]] ErrorCode ReaderEditName(ReaderAccount& in, const QString& passwd, const QString& newname) {
+	[[nodiscard]] static ErrorCode EditName(ReaderAccount& in, const QString& passwd, const QString& newname) {
 		AccountDAO acDAO;
 		QList<ReaderAccount> check;
 		ErrorCode tmp = acDAO.isUserExists(in.c_ID().qs_Value());
@@ -180,7 +185,7 @@ class EditProfile {//编辑个人资料
 		// 检验有效性
 		if (check[0].b_IsValid() == false)	return ErrorCode::ACCOUNT_INVALID;// 用户已不可用
 		// 密码检查
-		if (PasswordCheck::ReaderPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
+		if (PasswordCheck::UserPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
 			return ErrorCode::WRONG_PASSWORD;
 		}
 
@@ -198,7 +203,7 @@ class EditProfile {//编辑个人资料
 	}
 
 	// Reader 更新密码
-	[[nodiscard]] ErrorCode ReaderEditPassword(ReaderAccount& in, const QString& passwd, const QString& newpasswd, const QString& confirmnewpasswd) {
+	[[nodiscard]] static ErrorCode EditPassword(ReaderAccount& in, const QString& passwd, const QString& newpasswd, const QString& confirmnewpasswd) {
 		AccountDAO acDAO;
 		QList<ReaderAccount> check;
 		ErrorCode tmp = acDAO.isUserExists(in.c_ID().qs_Value());
@@ -217,7 +222,7 @@ class EditProfile {//编辑个人资料
 		// 检验有效性
 		if (check[0].b_IsValid() == false)	return ErrorCode::ACCOUNT_INVALID;// 用户已不可用
 		// 密码检查
-		if (PasswordCheck::ReaderPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
+		if (PasswordCheck::UserPasswordCheck(passwd, check[0]) == ErrorCode::WRONG_PASSWORD) {
 			return ErrorCode::WRONG_PASSWORD;
 		}
 
@@ -235,12 +240,12 @@ class EditProfile {//编辑个人资料
 	}
 
 	// Admin 不允许更改用户名
-	[[nodiscard]] ErrorCode AdminEditName(const AdminAccount& in) {
+	[[nodiscard]] static ErrorCode EditName(const AdminAccount& in) {
 		return ErrorCode::NO_ACCESS;
 	}
 
 	// Admin 不允许更改密码
-	[[nodiscard]] ErrorCode AdminEditPassword(const AdminAccount& in) {
+	[[nodiscard]] static ErrorCode EditPassword(const AdminAccount& in) {
 		return ErrorCode::NO_ACCESS;
 	}
 

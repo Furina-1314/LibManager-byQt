@@ -335,4 +335,11 @@ ApplicationWindow {
             }
         }
     }
+    Loader {
+    id: debugLoader
+    anchors.fill: parent
+    source: "Dashboard.qml"
+    active: true // 设置为 true 将立即实例化并覆盖当前主界面，方便直接测试
+    z: 999       // 提高 Z 轴层级，确保覆盖底层的登录逻辑视图
+}
 }

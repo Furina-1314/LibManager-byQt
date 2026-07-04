@@ -1,0 +1,223 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-b5b60c773dcdafbfebea.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "LibManager",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "all_aotstats::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_aotstats-Debug-8753597108b537b89dc8.json",
+					"name" : "all_aotstats",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint-Debug-b4c3d04c5cd206d735ba.json",
+					"name" : "all_qmllint",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint_json::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint_json-Debug-bbc44a28acd9a5778958.json",
+					"name" : "all_qmllint_json",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint_module::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint_module-Debug-267fd60b4a4522032c40.json",
+					"name" : "all_qmllint_module",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmltyperegistrations::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmltyperegistrations-Debug-fd845a3ecc326f045dfb.json",
+					"name" : "all_qmltyperegistrations",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager-Debug-079e705066ca9d45963f.json",
+					"name" : "appLibManager",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_autogen-Debug-6fd41499b7f6462647b8.json",
+					"name" : "appLibManager_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_autogen_timestamp_deps-Debug-96acd5c1eb6d9593b855.json",
+					"name" : "appLibManager_autogen_timestamp_deps",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_copy_qml::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_copy_qml-Debug-bc36330a01d3cd157e4d.json",
+					"name" : "appLibManager_copy_qml",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_copy_res::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_copy_res-Debug-0282d88c73408775d6dd.json",
+					"name" : "appLibManager_copy_res",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_qmlimportscan::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_qmlimportscan-Debug-863fd0e2ddd67c1924c5.json",
+					"name" : "appLibManager_qmlimportscan",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_qmllint::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_qmllint-Debug-9113622dafc3495e2fff.json",
+					"name" : "appLibManager_qmllint",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_qmllint_json::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_qmllint_json-Debug-4d425b85609304eb9e14.json",
+					"name" : "appLibManager_qmllint_json",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_qmllint_module::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_qmllint_module-Debug-58a16e8c0780ba3035a6.json",
+					"name" : "appLibManager_qmllint_module",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "appLibManager_qmltyperegistration::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-appLibManager_qmltyperegistration-Debug-2064dbe4f916295515dc.json",
+					"name" : "appLibManager_qmltyperegistration",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "clean_qml_context_properties::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-clean_qml_context_properties-Debug-640674d27407bb4e22d4.json",
+					"name" : "clean_qml_context_properties",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "dump_qml_context_properties::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-dump_qml_context_properties-Debug-2b7d8d17c0e7c25f4406.json",
+					"name" : "dump_qml_context_properties",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "generate_qmlls_build_ini_file::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-generate_qmlls_build_ini_file-Debug-4aadacf367c801fe1d64.json",
+					"name" : "generate_qmlls_build_ini_file",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "module_appLibManager_aotstats_target::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-module_appLibManager_aotstats_target-Debug-f03a88bc407b00601d0a.json",
+					"name" : "module_appLibManager_aotstats_target",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "E:/code/LibManager/build/Desktop_Qt_6_11_1_MinGW_64_bit_Debug",
+		"source" : "E:/code/LibManager"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

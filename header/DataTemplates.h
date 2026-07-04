@@ -172,6 +172,7 @@ public:
 	const BookLocation& stct_Location() const { return Location; }
 	const QDate& qd_DueDate() const { return DueDate; }
 	const QString& qs_Note() const { return Note; }
+	const UserID& c_BorrowerID() const { return BorrowerID; }
 	[[nodiscard]] ErrorCode SetVolID(const VolumeID& in) {
 		return VolID.SetValue(in.qs_Value());
 	}

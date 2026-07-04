@@ -158,6 +158,7 @@
 #define __MMX_WITH_SSE__ 1
 #define _fastcall __attribute__((__fastcall__))
 #define __LDBL_HAS_DENORM__ 1
+#define QT_WIDGETS_LIB 1
 #define __SEG_GS 1
 #define __BFLT16_EPSILON__ 7.81250000000000000000000000000000000e-3BF16
 #define __cplusplus 201703L
@@ -404,6 +405,7 @@
 #define __INT_FAST8_TYPE__ signed char
 #define __fastcall __attribute__((__fastcall__))
 #define __FLT64X_MIN__ 3.36210314311209350626267781732175260e-4932F64x
+#define QT_SQL_LIB 1
 #define __STDCPP_THREADS__ 1
 #define __BFLT16_HAS_DENORM__ 1
 #define __GNUC_STDC_INLINE__ 1

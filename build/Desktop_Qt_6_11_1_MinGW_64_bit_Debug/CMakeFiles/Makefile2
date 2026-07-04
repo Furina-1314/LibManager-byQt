@@ -95,12 +95,12 @@ clean: CMakeFiles/appLibManager_autogen.dir/clean
 # Target rules for target CMakeFiles/appLibManager.dir
 
 # All Build rule for target.
-CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_copy_qml.dir/all
-CMakeFiles/appLibManager.dir/all: CMakeFiles/generate_qmlls_build_ini_file.dir/all
 CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_copy_res.dir/all
+CMakeFiles/appLibManager.dir/all: CMakeFiles/generate_qmlls_build_ini_file.dir/all
+CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_copy_qml.dir/all
 CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_qmlimportscan.dir/all
-CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_autogen.dir/all
 CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all
+CMakeFiles/appLibManager.dir/all: CMakeFiles/appLibManager_autogen.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\appLibManager.dir\build.make CMakeFiles/appLibManager.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\appLibManager.dir\build.make CMakeFiles/appLibManager.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=E:\code\LibManager\build\Desktop_Qt_6_11_1_MinGW_64_bit_Debug\CMakeFiles --progress-num=2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 "Built target appLibManager"
@@ -544,9 +544,9 @@ CMakeFiles/appLibManager_qmlimportscan.dir/clean:
 # Target rules for target CMakeFiles/appLibManager_autogen_timestamp_deps.dir
 
 # All Build rule for target.
-CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/appLibManager_copy_qml.dir/all
-CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/generate_qmlls_build_ini_file.dir/all
 CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/appLibManager_copy_res.dir/all
+CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/generate_qmlls_build_ini_file.dir/all
+CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/appLibManager_copy_qml.dir/all
 CMakeFiles/appLibManager_autogen_timestamp_deps.dir/all: CMakeFiles/appLibManager_qmlimportscan.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\appLibManager_autogen_timestamp_deps.dir\build.make CMakeFiles/appLibManager_autogen_timestamp_deps.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\appLibManager_autogen_timestamp_deps.dir\build.make CMakeFiles/appLibManager_autogen_timestamp_deps.dir/build

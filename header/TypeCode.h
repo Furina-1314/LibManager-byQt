@@ -40,16 +40,19 @@ enum  class ErrorCode //错误代码
 	ILLEGAL_INPUT = 2002,//非法输入：输入不合格式或赋值意图违反逻辑
 	NO_RESULT = 2003,//未找到结果
 	VOLUME_ALREADY_BORROWED = 2004,//单册已借阅（针对同一账户对同一单册的重复借阅操作）
-	VOLUME_RESERVED = 2005,//单册不可获取：已被预约
-	VOLUME_NOT_AVAILABLE = 2006,//单册不可获取：其他情况
-	VOLUME_OVERDUE = 2007,//存在单册逾期
-	MAX_BORROW_LIMIT = 2008,//账户达到借阅上限
-	VOLUME_ALREADY_EXIST = 2009,//创建的单册已存在（对于Admin）
-	BOOK_ALREADY_EXIST = 2010,//创建的图书已存在（对于Admin）
-	NOT_EXIST = 2011,//删改的单册/图书不存在（对于Admin）
-	LOCATION_INVALID = 2012,// 馆藏位置无效
+	VOLUME_ONLOAN = 2005,//单册已外借
+	VOLUME_RESERVED = 2006,//单册不可获取：已被预约
+	VOLUME_NOT_AVAILABLE = 2007,//单册不可获取：其他情况
+	VOLUME_OVERDUE = 2008,//存在单册逾期
+	VOLUME_NOT_BORROWED = 2009,//单册未处于外借状态
+	MAX_BORROW_LIMIT = 2010,//账户达到借阅上限
+	VOLUME_ALREADY_EXIST = 2011,//创建的单册已存在（对于Admin）
+	BOOK_ALREADY_EXIST = 2012,//创建的图书已存在（对于Admin）
+	NOT_EXIST = 2013,//删改的单册/图书不存在（对于Admin）
+	LOCATION_INVALID = 2014,// 馆藏位置无效
 	//系统相关错误
 	SYSTEM_ERROR = 3001,//意外的系统错误
+	//3002-3005暂时空缺
 	FAILED_SEARCH = 3006,//搜寻失败
 	FAILED_TO_READ = 3007,//读失败
 	FAILED_TO_WRITE = 3008,//写失败
