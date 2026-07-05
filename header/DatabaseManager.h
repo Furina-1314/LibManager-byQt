@@ -239,7 +239,7 @@ public:
         QSqlQuery query(db);
         query.setForwardOnly(true);
         // 带过滤约束的查询
-        query.prepare("SELECT * FROM Account WHERE Auth=0 AND ID LIKE :input");
+        query.prepare("SELECT * FROM Account WHERE Auth=1 AND ID LIKE :input");
         query.bindValue(":input", userid);
         if (!query.exec()) {
             throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
@@ -294,7 +294,7 @@ public:
         QSqlQuery query(db);
         query.setForwardOnly(true);
         // 带过滤约束的查询
-        query.prepare("SELECT * FROM Account WHERE Auth=1 AND ID LIKE :input");
+        query.prepare("SELECT * FROM Account WHERE Auth=2 AND ID LIKE :input");
         query.bindValue(":input", userid);
         if (!query.exec()) {
             throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());

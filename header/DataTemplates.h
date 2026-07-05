@@ -365,10 +365,10 @@ public:
 class AdminAccount {
 private:
 	AdminID ID;//用户ID，AdminID应为5位非零开头数字
-	const QString Name = "Admin";//Admin的用户名不可更改
+	QString Name = "Admin";//Admin的用户名不可更改
 	bool IsValid;//账户有效性
 	Auth AdminAuth;
-	const int BorrowLimit = 0;//Admin不可借书
+	int BorrowLimit = 0;//Admin不可借书
 	QByteArray PasswordHash; // Hash
 	QByteArray Salt;         // salt
 public:

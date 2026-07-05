@@ -1,6 +1,7 @@
 ﻿import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import LibManager
 
 ApplicationWindow {
     id: window
@@ -168,8 +169,15 @@ ApplicationWindow {
                                     color: window.lightMode ? window.dark : window.light
                                 }
                                 onClicked: {
-                                    // TODO: [接口预留] 在此处获取 readerUsername.text 与 readerPassword.text，调用后端读者登录验证逻辑
-                                    console.log("执行读者登录逻辑")
+                                    // 调用底层桥接接口，0 对应 ErrorCode::SUCCESS
+                                    let status = SystemBridge.loginReader(readerUsername.text, readerPassword.text)
+                                    if (status === 0) {
+                                        console.log("读者登录成功")
+                                        debugLoader.active = true // 挂载 Dashboard
+                                    } else {
+                                        // TODO: 此处可扩充弹窗提示，目前使用后台输出
+                                        console.log("登录受阻: 错误码 " + status)
+                                    }        
                                 }
                             }
 
@@ -200,8 +208,7 @@ ApplicationWindow {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            // TODO: [接口预留] 在此处调用注册窗口的弹出或页面跳转逻辑
-                                            console.log("执行注册逻辑")
+                                        loginStack.currentIndex = 3 // 🚀 跳转至注册视图
                                         }
                                     }
                                 }
@@ -262,8 +269,14 @@ ApplicationWindow {
                                     color: window.lightMode ? window.dark : window.light
                                 }
                                 onClicked: {
-                                    // TODO: [接口预留] 在此处获取 adminUsername.text 与 adminPassword.text，调用后端管理员登录验证逻辑
-                                    console.log("执行管理员登录逻辑")
+                                    // 调用底层桥接接口
+                                    let status = SystemBridge.loginAdmin(adminUsername.text, adminPassword.text)
+                                    if (status === 0) {
+                                        console.log("管理员登录成功")
+                                        debugLoader.active = true // 挂载 Dashboard
+                                    } else {
+                                        console.log("登录受阻: 错误码 " + status)
+                                    }                               
                                 }
                             }
                             
@@ -276,6 +289,128 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: loginStack.currentIndex = 0
+                                }
+                            }
+                        }
+                    }
+                    // 视图 3: 读者注册
+                    Item {
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            width: 360
+                            spacing: 20 // 容纳4个输入框，略微缩减行距
+
+                            TextField {
+                                id: regReaderId
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 55
+                                font.pixelSize: 18
+                                placeholderText: qsTr("设置读者账号 (8位数字)")
+                                color: window.lightMode ? window.dark : window.light
+                                background: Rectangle {
+                                    radius: 5
+                                    color: window.lightMode ? window.reallyLight : window.reallyDark
+                                    border.color: window.lightMode ? window.dark : window.light
+                                }
+                            }
+
+                            TextField {
+                                id: regReaderName
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 55
+                                font.pixelSize: 18
+                                placeholderText: qsTr("设置用户名")
+                                color: window.lightMode ? window.dark : window.light
+                                background: Rectangle {
+                                    radius: 5
+                                    color: window.lightMode ? window.reallyLight : window.reallyDark
+                                    border.color: window.lightMode ? window.dark : window.light
+                                }
+                            }
+
+                            TextField {
+                                id: regReaderPassword
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 55
+                                font.pixelSize: 18
+                                placeholderText: qsTr("设置密码 (至少8位)")
+                                echoMode: TextInput.Password
+                                color: window.lightMode ? window.dark : window.light
+                                background: Rectangle {
+                                    radius: 5
+                                    color: window.lightMode ? window.reallyLight : window.reallyDark
+                                    border.color: window.lightMode ? window.dark : window.light
+                                }
+                            }
+
+                            TextField {
+                                id: regReaderConfirmPassword
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 55
+                                font.pixelSize: 18
+                                placeholderText: qsTr("确认密码")
+                                echoMode: TextInput.Password
+                                color: window.lightMode ? window.dark : window.light
+                                background: Rectangle {
+                                    radius: 5
+                                    color: window.lightMode ? window.reallyLight : window.reallyDark
+                                    border.color: window.lightMode ? window.dark : window.light
+                                }
+                            }
+
+                            Button {
+                                id: regSubmitBtn
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 55
+                                text: qsTr("立即注册")
+                                contentItem: Text {
+                                    text: regSubmitBtn.text
+                                    color: window.lightMode ? window.light : window.dark
+                                    font.pixelSize: 20
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 5
+                                    color: window.lightMode ? window.dark : window.light
+                                }
+                                onClicked: {
+                                    // 前置非空拦截
+                                    if (regReaderId.text === "" || regReaderName.text === "" || regReaderPassword.text === "" || regReaderConfirmPassword.text === "") {
+                                        messageDialog.messageText = "请完整填写所有注册信息";
+                                        messageDialog.open();
+                                        return;
+                                    }
+
+                                    // 调用桥接层
+                                    let status = SystemBridge.registerReader(regReaderId.text, regReaderName.text, regReaderPassword.text, regReaderConfirmPassword.text)
+                                    
+                                    // ErrorCode::SUCCESS 对应 0
+                                    if (status === 0) {
+                                        messageDialog.messageText = "注册成功，请返回登录";
+                                        messageDialog.open();
+                                        
+                                        // 清空表单数据
+                                        regReaderId.text = "";
+                                        regReaderName.text = "";
+                                        regReaderPassword.text = "";
+                                        regReaderConfirmPassword.text = "";
+                                        
+                                        // 跳转回读者登录视图
+                                        loginStack.currentIndex = 1;
+                                    }
+                                }
+                            }
+
+                            Label {
+                                text: qsTr("< 返回读者登录")
+                                color: window.lightMode ? window.dark : window.light
+                                font.pixelSize: 16
+                                font.underline: true
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: loginStack.currentIndex = 1 // 🚀 返回读者登录视图
                                 }
                             }
                         }
@@ -339,7 +474,71 @@ ApplicationWindow {
     id: debugLoader
     anchors.fill: parent
     source: "Dashboard.qml"
-    active: true // 设置为 true 将立即实例化并覆盖当前主界面，方便直接测试
+    active: false // 默认为 false，必须通过安全检验后激活
     z: 999       // 提高 Z 轴层级，确保覆盖底层的登录逻辑视图
-}
+    }
+    // ==========================================
+    // 🪧 全局消息弹窗
+    // ==========================================
+    Dialog {
+        id: messageDialog
+        anchors.centerIn: parent
+        modal: true
+        width: 320
+        margins: 20
+        // 移除默认的背景和标题栏，进行完全自定义
+        background: Rectangle {
+            color: window.lightMode ? window.reallyLight : window.reallyDark
+            border.color: window.lightMode ? window.dark : window.light
+            border.width: 1
+            radius: 5
+        }
+
+        property string messageText: ""
+
+        contentItem: ColumnLayout {
+            spacing: 25
+
+            Label {
+                text: messageDialog.messageText
+                color: window.lightMode ? window.dark : window.light
+                font.pixelSize: 18
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Button {
+                text: qsTr("确认")
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 45
+
+                contentItem: Text {
+                    text: parent.text
+                    color: window.lightMode ? window.reallyLight : window.reallyDark
+                    font.pixelSize: 18
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                background: Rectangle {
+                    radius: 5
+                    color: window.lightMode ? window.dark : window.light
+                }
+                onClicked: messageDialog.close()
+            }
+        }
+    }
+    // ==========================================
+    // 📡 后端信号监听器
+    // ==========================================
+    Connections {
+        target: SystemBridge
+        
+        // 监听 C++ 抛出的 loginError 信号
+        function onLoginError(errorMsg) {
+            messageDialog.messageText = errorMsg;
+            messageDialog.open();
+        }
+    }
 }

@@ -12,6 +12,8 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 find_package(Qt6 REQUIRED COMPONENTS Sql)
 
+find_package(Qt6 REQUIRED COMPONENTS Qml)
+
 qt_standard_project_setup(REQUIRES 6.10)
 
 # Content of downloaded design from Figma to Qt or similar
@@ -27,6 +29,10 @@ qt_add_qml_module(appLibManager
     URI LibManager
     QML_FILES
         Main.qml
+        Dashboard.qml
+    SOURCES
+        header/SystemBridge.h
+        src/SystemBridge.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -43,6 +49,9 @@ set_target_properties(appLibManager PROPERTIES
 target_link_libraries(appLibManager PRIVATE Qt6::Quick)
 target_link_libraries(appLibManager PRIVATE Qt6::Widgets)
 target_link_libraries(appLibManager PRIVATE Qt6::Sql)
+target_link_libraries(appLibManager PRIVATE Qt6::Qml)
+
+target_include_directories(appLibManager PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/header)
 
 install(TARGETS appLibManager
     BUNDLE DESTINATION .
