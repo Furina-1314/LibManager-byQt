@@ -28,7 +28,7 @@ public:
 		if (!flag)return ErrorCode::NO_RESULT;
 
 		// 针对软删除的检验
-		if (!vl_tmp[i].b_IsValid())	return ErrorCode::VOLUME_NOT_AVAILABLE;
+		if (!vl_tmp[i].b_IsValid())	return ErrorCode::NOT_EXIST;
 
 		// 检查单册可用性
 		switch (vl_tmp[i].enum_IsAvailable()) {
@@ -171,7 +171,198 @@ public:
 
 	}
 
-	// 图书信息更新（仅限 Admin ）
-	[[nodiscard]] static ErrorCode BookUpdate();
+	// 单册信息更新（仅限 Admin ）（增加及修改操作）
+	// 单册中的借阅事务相关（ BorrowerID ，DueDate ）理论上不应该在此修改
+	[[nodiscard]] static ErrorCode VolUpdate(Book& bkin, const Volume& volin, const AdminAccount& admin) {
+		
+		// Admin 鉴权
+		if (!admin.b_IsValid() || admin.enum_AdminAuth() != Auth::Admin)	return ErrorCode::NO_ACCESS;
+
+		// 软删除检验
+		if (!volin.b_IsValid())	return ErrorCode::NOT_EXIST;
+
+		// 非法输入检验
+		if (volin.enum_IsAvailable() == Availability::Illegal)	return ErrorCode::ILLEGAL_INPUT;
+
+		// 搜寻单册信息，若已存在单册即更新
+		int i = 0;
+		bool isExist = false;
+
+		QList<Volume> vl_tmp = bkin.ql_VolumeList();
+		for (i = 0; i < vl_tmp.size(); i++) {
+			if (vl_tmp[i].c_VolID() == volin.c_VolID()) {
+				isExist = true;
+				vl_tmp[i].SetAvailability(volin.enum_IsAvailable());
+				vl_tmp[i].SetIsOpenshelf(volin.b_IsOpenshelf());
+				vl_tmp[i].SetLocation(volin.stct_Location());
+				vl_tmp[i].SetNote(volin.qs_Note());
+				vl_tmp[i].SetIsValid(volin.b_IsValid());
+				break;
+			}
+		}
+		if (!isExist)	vl_tmp.append(volin);
+
+		// 更新
+		BookDAO bkDAO;
+		bkin.SetVolumeList(vl_tmp);
+		try {
+			ErrorCode status= bkDAO.updateVolumeInfo(bkin);
+			return status;
+		}
+		catch (DatabaseException& ex) {
+			qWarning() << "错误：" << ex.qWhat();
+			return ex.code();
+		}
+
+		return ErrorCode::SUCCESS;
+
+	}
+
+	// 单册删除（仅限 Admin ）
+	[[nodiscard]] static ErrorCode VolDelete(Book& bkin, const Volume& volin, const AdminAccount& admin) {
+		// Admin 鉴权
+		if (!admin.b_IsValid() || admin.enum_AdminAuth() != Auth::Admin)	return ErrorCode::NO_ACCESS;
+
+		// 软删除检验
+		if (!volin.b_IsValid())	return ErrorCode::NOT_EXIST;
+
+
+		// 搜寻单册信息及业务校验
+		int i = 0;
+		bool isExist = false;
+
+		QList<Volume> vl_tmp = bkin.ql_VolumeList();
+		for (i = 0; i < vl_tmp.size(); i++) {
+			if (vl_tmp[i].c_VolID() == volin.c_VolID()) {
+				isExist = true;
+				// 禁止删除未归还的单册
+				if (vl_tmp[i].enum_IsAvailable() == Availability::Unavailable_OnLoan) {
+					return ErrorCode::VOLUME_ONLOAN;
+				}
+				// 软删除
+				vl_tmp[i].SetIsValid(false);
+				vl_tmp[i].SetAvailability(Availability::Unavailable_Deleted);
+				break;
+			}
+		}
+		if (!isExist)	return ErrorCode::NOT_EXIST;
+
+		// 更新
+		BookDAO bkDAO;
+		bkin.SetVolumeList(vl_tmp);
+		try {
+			ErrorCode status = bkDAO.updateVolumeInfo(bkin);
+			return status;
+		}
+		catch (DatabaseException& ex) {
+			qWarning() << "错误：" << ex.qWhat();
+			return ex.code();
+		}
+
+		return ErrorCode::SUCCESS;
+
+	}
+
+	// 禁止 Reader 修改单册信息
+	[[nodiscard]] static ErrorCode VolUpdate(Book& bkin, const Volume& volin, const ReaderAccount& reader) {
+		return ErrorCode::NO_ACCESS;
+	}
+
+	[[nodiscard]] static ErrorCode VolDelete(Book& bkin, const Volume& volin, const ReaderAccount& reader) {
+		return ErrorCode::NO_ACCESS;
+	}
 
 };
+
+class BookOperation {// 图书操作
+public:
+
+	// 图书信息更新（仅限 Admin ）（增加及修改操作）
+	[[nodiscard]] static ErrorCode BookUpdate(Book& in, const AdminAccount& admin) {
+
+		// Admin 鉴权
+		if (!admin.b_IsValid() || admin.enum_AdminAuth() != Auth::Admin)	return ErrorCode::NO_ACCESS;
+
+		// 空输入检验
+		if (in.qs_Name().isEmpty() || in.ql_Author().isEmpty())	return ErrorCode::EMPTY_INPUT;
+
+		// 软删除检验
+		if (!in.b_IsValid())	return ErrorCode::NOT_EXIST;
+
+		// 更新
+		BookDAO bkDAO;
+		try {
+			ErrorCode status = bkDAO.updateBookInfo(in);
+			return status;
+		}
+		catch (DatabaseException& ex) {
+			qWarning() << "错误：" << ex.qWhat();
+			return ex.code();
+		}
+
+		return ErrorCode::SUCCESS;
+
+	}
+
+	// 图书删除（仅限 Admin ）
+	[[nodiscard]] static ErrorCode BookDelete(Book& in, const AdminAccount& admin) {
+
+		// Admin 鉴权
+		if (!admin.b_IsValid() || admin.enum_AdminAuth() != Auth::Admin)	return ErrorCode::NO_ACCESS;
+
+		// 软删除检验
+		if (!in.b_IsValid())	return ErrorCode::NOT_EXIST;
+
+		// 检验是否存在未归还的单册
+		int i = 0;
+		QList<Volume> vl_tmp = in.ql_VolumeList();
+		for (i = 0; i < vl_tmp.size(); i++) {
+			if (vl_tmp[i].enum_IsAvailable() == Availability::Unavailable_OnLoan)
+				return ErrorCode::VOLUME_ONLOAN;
+		}
+
+		// 下属单册一并删除
+		for (i = 0; i < vl_tmp.size(); i++) {
+			vl_tmp[i].SetIsValid(false);
+			vl_tmp[i].SetAvailability(Availability::Unavailable_Deleted);
+		}
+		in.SetVolumeList(vl_tmp);
+		in.SetIsValid(false);
+
+		// 同步更新
+		BookDAO bkDAO;
+		QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+		if (!db.transaction()) {
+			return ErrorCode::DATABASE_ERROR;
+		}
+
+		try {
+			bkDAO.updateBookInfo(in);
+			bkDAO.updateVolumeInfo(in);
+
+			if (!db.commit()) {
+				throw DatabaseException(ErrorCode::DATABASE_ERROR, "删除失败");
+			}
+		}
+		catch (DatabaseException& ex) {
+			db.rollback(); // 发生异常即回滚
+			qWarning() << "删除失败，数据已回滚：" << ex.qWhat();
+			return ex.code();
+		}
+
+		return ErrorCode::SUCCESS;
+
+	}
+
+	// 禁止 Reader 修改单册信息
+	[[nodiscard]] static ErrorCode BookUpdate(Book& in, const ReaderAccount& reader) {
+		return ErrorCode::NO_ACCESS;
+	}
+
+	[[nodiscard]] static ErrorCode BookDelete(Book& in, const ReaderAccount& reader) {
+		return ErrorCode::NO_ACCESS;
+	}
+
+
+};
+

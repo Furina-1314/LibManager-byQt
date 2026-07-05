@@ -6,7 +6,8 @@ enum class Availability //可用状态
 	Available = 1,//可外借
 	Unavailable_OnLoan = 2,//不可外借：外借中
 	Unavailable_Lost = 3,//不可外借：单册丢失
-	Unavailable_Processing = 4//不可外借：文献加工中
+	Unavailable_Processing = 4,//不可外借：文献加工中
+	Unavailable_Deleted = 5//不可用：已被删除
 };
 enum class Library //分馆信息
 {
@@ -52,7 +53,7 @@ enum  class ErrorCode //错误代码
 	LOCATION_INVALID = 2014,// 馆藏位置无效
 	//系统相关错误
 	SYSTEM_ERROR = 3001,//意外的系统错误
-	//3002-3005暂时空缺
+						//3002-3005暂时空缺
 	FAILED_SEARCH = 3006,//搜寻失败
 	FAILED_TO_READ = 3007,//读失败
 	FAILED_TO_WRITE = 3008,//写失败
