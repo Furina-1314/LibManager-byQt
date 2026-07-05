@@ -59,6 +59,7 @@ public:
                          PubYear INTEGER NOT NULL,
                          Language INTEGER NOT NULL,
                          Category INTEGER NOT NULL,
+                         IsValid INTEGER NOT NULL DEFAULT 1,
                          CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                          EditedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                        )
@@ -72,6 +73,7 @@ public:
                          VolNote TEXT,
                          VolAvailability INTEGER NOT NULL,
                          VolIsOpenshelf INTEGER NOT NULL,
+                         IsValid INTEGER NOT NULL DEFAULT 1,
 
                          PRIMARY KEY (ISBN, VolId),
                          FOREIGN KEY (ISBN) REFERENCES Book(ISBN) ON DELETE CASCADE ON UPDATE CASCADE
@@ -422,6 +424,8 @@ public:
 // 图书DAO
 class BookDAO {// 图书类DAO
 public:
+
+    // 查询图书及单册信息--只返回未被软删除的结果
     // 查询图书接口--ISBN查询
     [[nodiscard]] ErrorCode getBookInfobyISBN(const QString& ISBN, QList<Book>& results) const // 查询图书信息
     {
@@ -436,7 +440,7 @@ public:
         QSqlQuery query(db);
         query.setForwardOnly(true);
         // 带过滤约束的查询
-        query.prepare("SELECT * FROM Book WHERE ISBN LIKE :input");
+        query.prepare("SELECT * FROM Book WHERE ISBN LIKE :input AND IsValid = 1");
         query.bindValue(":input", ISBN);
         if (!query.exec()) {
             throw DatabaseException(ErrorCode::FAILED_SEARCH, "查询失败", query.lastError());
@@ -450,6 +454,7 @@ public:
         int idxPubYear = record.indexOf("PubYear");
         int idxCategory = record.indexOf("Category");
         int idxIntroduction = record.indexOf("Introduction");
+        int idxIsValid = record.indexOf("IsValid");
 
         // 检查字段映射是否断裂
         if (idxISBN == -1 || idxTitle == -1) {
@@ -483,6 +488,7 @@ public:
             book.SetPubLanguage(static_cast<Language>(query.value(idxLanguage).toInt()));
             book.SetIntroduction(query.value(idxIntroduction).toString());
             book.SetAuthor(authors);
+            book.SetIsValid(query.value(idxIsValid).toBool());
 
             results.append(book);
         }
@@ -509,7 +515,7 @@ public:
         }
 
         // 查询 Book 基础信息
-        QString sql = "SELECT * FROM Book WHERE 1=1";
+        QString sql = "SELECT * FROM Book WHERE IsValid = 1";
         for (int i = 0; i < keywords.size(); i++) {
             // 使用动态占位符防止覆盖
             sql += QString(" AND Title LIKE :kw%1").arg(i);
@@ -536,6 +542,7 @@ public:
         int idxPubYear = record.indexOf("PubYear");
         int idxCategory = record.indexOf("Category");
         int idxIntroduction = record.indexOf("Introduction");
+        int idxIsValid = record.indexOf("IsValid");
 
         // 检查字段映射是否断裂
         if (idxISBN == -1 || idxTitle == -1) {
@@ -569,6 +576,7 @@ public:
             book.SetPubLanguage(static_cast<Language>(query.value(idxLanguage).toInt()));
             book.SetIntroduction(query.value(idxIntroduction).toString());
             book.SetAuthor(authors);
+            book.SetIsValid(query.value(idxIsValid).toBool());
 
             results.append(book);
         }
@@ -607,7 +615,7 @@ public:
         LEFT JOIN LoanRecord lr 
             -- 约束：仅挂载当前尚未归还的那一条活跃流水
             ON v.ISBN = lr.ISBN AND v.VolID = lr.VolID AND lr.IsReturned = 0 
-        WHERE v.ISBN = :input
+        WHERE v.ISBN = :input AND v.IsValid = 1
         )");
         query.bindValue(":input", querybook.c_BookISBN().qs_Value());
         if (!query.exec()) {
@@ -626,6 +634,7 @@ public:
         int idxLayer = record.indexOf("Layer");
         int idxActiveBorrower = record.indexOf("ActiveBorrower");
         int idxActiveDueDate = record.indexOf("ActiveDueDate");
+        int idxIsValid = record.indexOf("IsValid");
 
         // 检查字段映射是否断裂
         if (idxVolID == -1 || idxActiveBorrower == -1) {
@@ -648,6 +657,7 @@ public:
             volume.SetNote(query.value(idxVolNote).toString());
             volume.SetAvailability(static_cast<Availability>(query.value(idxVolAvailability).toInt()));
             volume.SetIsOpenshelf(query.value(idxVolIsOpenshelf).toInt());
+            volume.SetIsValid(query.value(idxIsValid).toBool());
 
             // 当查询到某本单册时，探测其是否被外借挂载
             QVariant borrowerVar = query.value(idxActiveBorrower);
@@ -695,8 +705,8 @@ public:
             // 使用 ON CONFLICT 实现Upsert
             // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
             query.prepare(R"(
-            INSERT INTO Book (ISBN, Title, Introduction, Press, PubYear, Language, Category, CreatedAt, EditedAt) 
-            VALUES (:isbn, :title, :introduction, :press, :pubyear, :language, :category, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO Book (ISBN, Title, Introduction, Press, PubYear, Language, Category, IsValid, CreatedAt, EditedAt) 
+            VALUES (:isbn, :title, :introduction, :press, :pubyear, :language, :category, :isvalid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(ISBN) DO UPDATE SET 
                 Title = excluded.Title,
                 Introduction = excluded.Introduction,
@@ -704,6 +714,7 @@ public:
                 PubYear = excluded.PubYear,
                 Language = excluded.Language,
                 Category = excluded.Category,
+                IsValid = excluded.IsValid,
                 -- 冲突时，旧记录的 CreatedAt 将原封不动，仅 EditedAt 会被刷新
                 EditedAt = CURRENT_TIMESTAMP
         )");
@@ -717,6 +728,7 @@ public:
             query.bindValue(":pubyear", in.i_PubYear());
             query.bindValue(":language", static_cast<int>(in.enum_PubLanguage()));
             query.bindValue(":category", static_cast<int>(in.enum_PubCategory()));
+            query.bindValue(":isvalid", in.b_IsValid() ? 1 : 0);
 
             // 执行并捕获异常
             if (!query.exec()) {
@@ -783,12 +795,13 @@ public:
             // 使用 ON CONFLICT 实现Upsert
             // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
             query.prepare(R"(
-            INSERT INTO Volume (VolID, ISBN, VolNote, VolAvailability, VolIsOpenshelf) 
-            VALUES (:volid, :isbn, :volnote, :volavailability, :volisopenshelf)
+            INSERT INTO Volume (VolID, ISBN, VolNote, VolAvailability, VolIsOpenshelf, IsValid) 
+            VALUES (:volid, :isbn, :volnote, :volavailability, :volisopenshelf, :isvalid)
             ON CONFLICT(ISBN, VolID) DO UPDATE SET 
                 VolNote = excluded.VolNote,
                 VolAvailability = excluded.VolAvailability,
-                VolIsOpenshelf = excluded.VolIsOpenshelf
+                VolIsOpenshelf = excluded.VolIsOpenshelf,
+                IsValid = excluded.IsValid
         )");
             query2.prepare(R"(
             INSERT INTO VolLocation (VolID, ISBN, Lib, Floor, Area, Shelf, Layer) 
@@ -811,6 +824,8 @@ public:
                 query.bindValue(":volnote", temp[i].qs_Note());
                 query.bindValue(":volavailability", static_cast<int>(temp[i].enum_IsAvailable()));
                 query.bindValue(":volisopenshelf", temp[i].b_IsOpenshelf());
+                query.bindValue(":isvalid", temp[i].b_IsValid() ? 1 : 0);
+
                 // 执行并捕获异常
                 if (!query.exec()) {
                     throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册基本数据失败", query.lastError());

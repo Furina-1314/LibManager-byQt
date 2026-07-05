@@ -27,6 +27,9 @@ public:
 		}
 		if (!flag)return ErrorCode::NO_RESULT;
 
+		// 针对软删除的检验
+		if (!vl_tmp[i].b_IsValid())	return ErrorCode::VOLUME_NOT_AVAILABLE;
+
 		// 检查单册可用性
 		switch (vl_tmp[i].enum_IsAvailable()) {
 		case Availability::Unavailable_OnLoan:

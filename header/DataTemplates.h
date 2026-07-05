@@ -161,10 +161,12 @@ private:
 	QDate DueDate;//外借到期时间
 	UserID BorrowerID;//目前借阅者的ID，预备供用户管理使用
 	QString Note;//单册信息备注
+	bool IsValid;//供软删除用
 public:
 	Volume(Availability b = Availability::Illegal, bool c = 0, QDate date = QDate()) {
 		IsAvailable = b; IsOpenshelf = c;
 		DueDate = date;
+		IsValid = true;
 			}
 	const VolumeID& c_VolID() const { return VolID; }
 	Availability enum_IsAvailable() const { return IsAvailable; }
@@ -173,6 +175,7 @@ public:
 	const QDate& qd_DueDate() const { return DueDate; }
 	const QString& qs_Note() const { return Note; }
 	const UserID& c_BorrowerID() const { return BorrowerID; }
+	bool b_IsValid() const { return IsValid; }
 	[[nodiscard]] ErrorCode SetVolID(const VolumeID& in) {
 		return VolID.SetValue(in.qs_Value());
 	}
@@ -189,6 +192,7 @@ public:
 	[[nodiscard]] ErrorCode SetDueDate(const QDate& in) { DueDate = in; return ErrorCode::SUCCESS; }
 	[[nodiscard]] ErrorCode SetLocation(const BookLocation& in) { Location = in; return ErrorCode::SUCCESS; }
 	[[nodiscard]] ErrorCode SetNote(const QString& in) { Note = in; return ErrorCode::SUCCESS; }
+	[[nodiscard]] ErrorCode SetIsValid(const bool in) { IsValid = in; return ErrorCode::SUCCESS; }
 };
 class Book {
 private:
@@ -201,6 +205,7 @@ private:
 	Language PubLanguage;//出版文种
 	QList<Volume> VolumeList;//单册列表
 	QString Introduction;//图书介绍
+	bool IsValid;//供软删除用
 public:
 	Book(QString b = "", QList<QString> auth = QList<QString>(), QString prss = "",
 		Category cat = Category::Illegal, int yr = -9999, Language lang = Language::Illegal,
@@ -208,6 +213,7 @@ public:
 		Name = b; Author = auth; Press = prss;
 		PubCategory = cat; PubYear = yr; PubLanguage = lang;
 		VolumeList = list;
+		IsValid = true;
 	}
 	const QString& qs_Name() const { return Name; }
 	const QList<QString>& ql_Author() const { return Author; }
@@ -218,6 +224,7 @@ public:
 	const QList<Volume>& ql_VolumeList() const { return VolumeList; }
 	const QString& qs_Introduction() const { return Introduction; }
 	const ISBN& c_BookISBN() const { return BookISBN; }
+	bool b_IsValid() const { return IsValid; }
 	[[nodiscard]] ErrorCode SetISBN(const QString& in) { return BookISBN.SetValue(in); }
 	[[nodiscard]] ErrorCode SetName(const QString& in) {
 		if (in.isEmpty()) { return ErrorCode::EMPTY_INPUT; }
@@ -248,6 +255,7 @@ public:
 		if (in.isEmpty())	return ErrorCode::EMPTY_INPUT;
 		Introduction = in; return ErrorCode::SUCCESS;
 	}
+	[[nodiscard]] ErrorCode SetIsValid(const bool in) { IsValid = in; return ErrorCode::SUCCESS; }
 };
 class LoanRecord {
 private:

@@ -44,7 +44,7 @@ enum  class ErrorCode //错误代码
 	VOLUME_RESERVED = 2006,//单册不可获取：已被预约
 	VOLUME_NOT_AVAILABLE = 2007,//单册不可获取：其他情况
 	VOLUME_OVERDUE = 2008,//存在单册逾期
-	VOLUME_NOT_BORROWED = 2009,//单册未处于外借状态
+	VOLUME_NOT_BORROWED = 2009,//单册未处于外借状态（用于归还操作）
 	MAX_BORROW_LIMIT = 2010,//账户达到借阅上限
 	VOLUME_ALREADY_EXIST = 2011,//创建的单册已存在（对于Admin）
 	BOOK_ALREADY_EXIST = 2012,//创建的图书已存在（对于Admin）

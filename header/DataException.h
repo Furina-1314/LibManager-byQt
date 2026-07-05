@@ -30,7 +30,7 @@ public:
         return m_qMessage;
     }
 
-    // 扩展接口：为控制器的 return 提供强类型的 ErrorCode
+    // 扩展接口：为控制器的 return 提供 ErrorCode
     ErrorCode code() const {
         return m_code;
     }
