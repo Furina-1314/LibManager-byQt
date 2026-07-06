@@ -529,16 +529,23 @@ ApplicationWindow {
             }
         }
     }
-    // ==========================================
-    // 📡 后端信号监听器
+// ==========================================
+    // 📡 后端信号与状态监听器
     // ==========================================
     Connections {
         target: SystemBridge
         
-        // 监听 C++ 抛出的 loginError 信号
         function onLoginError(errorMsg) {
             messageDialog.messageText = errorMsg;
             messageDialog.open();
+        }
+
+        // 监听全局状态更变，实现注销时的输入框静默清理
+        function onUserInfoChanged() {
+            if (SystemBridge.currentUserId === "-") {
+                readerUsername.text = ""; readerPassword.text = "";
+                adminUsername.text = ""; adminPassword.text = "";
+            }
         }
     }
 }

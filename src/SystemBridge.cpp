@@ -1,6 +1,7 @@
 ﻿#include "header/SystemBridge.h"
 // 引入后端实现
 #include "src/UserService.cpp" 
+#include "src/LibraryService.cpp"
 #include "header/Stats.h"
 #include <QVariantMap>
 #include <algorithm>
@@ -299,4 +300,295 @@ int SystemBridge::currentOverdueCount() const {
         return count;
     }
     return 0;
+}
+
+// ----------------------------------------------------
+// 高级条件检索 (复用底层 LoanRecordDAO)
+// statusIndex 映射: 0=全部, 1=已归还, 2=未归还, 3=已逾期
+// ----------------------------------------------------
+QVariantList SystemBridge::advancedSearch(const QString& isbn, const QString& volId, int statusIndex, const QString& startDate, const QString& endDate) {
+    QVariantList resultList;
+    if (!m_isAdmin && !m_currentReader.has_value()) return resultList;
+
+    LoanRecordDAO lrDAO;
+    LoanRecord queryLr;
+    QList<Filter> filters;
+
+    // 1. 权限隔离：如果不是管理员，强制注入 BorrowerID 过滤条件
+    if (!m_isAdmin) {
+        queryLr.SetBorrowerID(m_currentReader->c_ID());
+        filters.append(Filter::BorrowerID);
+    }
+
+    // 2. 动态装配查询条件
+    if (!isbn.trimmed().isEmpty()) {
+        ISBN iso; iso.SetValue(isbn.trimmed());
+        queryLr.SetBookISBN(iso);
+        filters.append(Filter::ISBN);
+    }
+
+    if (!volId.trimmed().isEmpty()) {
+        VolumeID v; v.SetValue(volId.trimmed());
+        queryLr.SetVolumeID(v);
+        filters.append(Filter::VolID);
+    }
+
+    if (statusIndex == 1) { // 已归还
+        queryLr.SetIsReturned(true);
+        filters.append(Filter::IsReturned);
+    }
+    else if (statusIndex == 2) { // 未归还
+        queryLr.SetIsReturned(false);
+        filters.append(Filter::IsReturned);
+    }
+    else if (statusIndex == 3) { // 已逾期
+        queryLr.SetIsReturned(false);
+        queryLr.SetIsOverdue(true);
+        filters.append(Filter::IsReturned);
+        filters.append(Filter::IsOverdue);
+    }
+
+    // 3. 处理时间区间
+    QDate sDate(1970, 1, 1);
+    QDate eDate(2100, 1, 1);
+    if (!startDate.trimmed().isEmpty()) {
+        QDate parsed = QDate::fromString(startDate.trimmed(), "yyyy-MM-dd");
+        if (parsed.isValid()) sDate = parsed;
+    }
+    if (!endDate.trimmed().isEmpty()) {
+        QDate parsed = QDate::fromString(endDate.trimmed(), "yyyy-MM-dd");
+        if (parsed.isValid()) eDate = parsed;
+    }
+
+    // 4. 执行查询
+    QList<LoanRecord> records;
+    ErrorCode status = lrDAO.getLoanRecord(queryLr, sDate, eDate, filters, records);
+    if (status != ErrorCode::SUCCESS) return resultList;
+
+    // 5. 自新到旧降序排序
+    std::sort(records.begin(), records.end(), [](const LoanRecord& a, const LoanRecord& b) {
+        return a.qd_BorrowDate() > b.qd_BorrowDate();
+        });
+
+    // 6. 数据组装 (与全量查询复用映射逻辑)
+    BookDAO bDAO;
+    for (const LoanRecord& lr : records) {
+        QVariantMap map;
+        map["borrowerId"] = lr.c_BorrowerID().qs_Value();
+        map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
+        map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
+
+        QString statusStr = "已归还";
+        if (!lr.b_IsReturned()) {
+            statusStr = lr.b_IsOverdue() ? "已逾期" : "未归还";
+        }
+        map["status"] = statusStr;
+
+        QList<Book> books;
+        if (bDAO.getBookInfobyISBN(lr.c_ISBN().qs_Value(), books) == ErrorCode::SUCCESS && !books.isEmpty()) {
+            Book bk = books[0];
+            map["title"] = bk.qs_Name();
+            map["author"] = bk.ql_Author().join(", ");
+            if (bDAO.getVolumeInfo(bk) == ErrorCode::SUCCESS) {
+                for (const Volume& vol : bk.ql_VolumeList()) {
+                    if (vol.c_VolID().qs_Value() == lr.c_VolID().qs_Value()) {
+                        BookLocation loc = vol.stct_Location();
+                        map["location"] = QString("分馆代码:%1 | %2层 | 区代码:%3 | %4架%5层")
+                            .arg(static_cast<int>(loc.libraryID)).arg(loc.floor)
+                            .arg(static_cast<int>(loc.areaID)).arg(loc.shelf).arg(loc.layer);
+                        break;
+                    }
+                }
+            }
+        }
+        else {
+            map["title"] = "数据脱机"; map["author"] = "-"; map["location"] = "-";
+        }
+        resultList.append(map);
+    }
+    return resultList;
+}
+
+// ----------------------------------------------------
+// 图书检索与展示
+// ----------------------------------------------------
+QVariantList SystemBridge::searchBooks(const QString& keyword) {
+    QVariantList res;
+    BookDAO dao;
+    QList<Book> books;
+    QList<QString> kws;
+    if (!keyword.trimmed().isEmpty()) kws.append(keyword.trimmed());
+    else kws.append(""); // 传入空字符串通配符以拉取全量合法数据
+
+    if (dao.getBookInfobyTitle(kws, books) == ErrorCode::SUCCESS) {
+        for (const auto& b : books) {
+            QVariantMap m;
+            m["isbn"] = b.c_BookISBN().qs_Value();
+            m["title"] = b.qs_Name();
+            m["author"] = b.ql_Author().join(", ");
+            m["press"] = b.qs_Press();
+            m["pubYear"] = b.i_PubYear();
+            res.append(m);
+        }
+    }
+    return res;
+}
+
+QVariantList SystemBridge::getPopularBooks() {
+    QVariantList res;
+    QList<QPair<Book, int>> popList;
+    if (Stats::getTop20Books(popList) == ErrorCode::SUCCESS) {
+        for (const auto& pair : popList) {
+            QVariantMap m;
+            m["isbn"] = pair.first.c_BookISBN().qs_Value();
+            m["title"] = pair.first.qs_Name();
+            m["author"] = pair.first.ql_Author().join(", ");
+            m["press"] = pair.first.qs_Press();
+            m["pubYear"] = pair.first.i_PubYear();
+            m["borrowCount"] = pair.second;
+            res.append(m);
+        }
+    }
+    return res;
+}
+
+QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
+    QVariantMap res;
+    BookDAO dao;
+    QList<Book> books;
+    if (dao.getBookInfobyISBN(isbn, books) == ErrorCode::SUCCESS && !books.isEmpty()) {
+        Book bk = books[0];
+        res["isbn"] = bk.c_BookISBN().qs_Value();
+        res["title"] = bk.qs_Name();
+        res["author"] = bk.ql_Author().join(", ");
+        res["press"] = bk.qs_Press();
+        res["pubYear"] = bk.i_PubYear();
+        res["intro"] = bk.qs_Introduction();
+
+        QVariantList volList;
+        if (dao.getVolumeInfo(bk) == ErrorCode::SUCCESS) {
+            for (const Volume& v : bk.ql_VolumeList()) {
+                QVariantMap vm;
+                vm["volId"] = v.c_VolID().qs_Value();
+
+                QString statusStr = "未知";
+                switch (v.enum_IsAvailable()) {
+                case Availability::Available: statusStr = "在馆可借"; break;
+                case Availability::Unavailable_OnLoan: statusStr = "已借出"; break;
+                case Availability::Unavailable_Lost: statusStr = "遗失"; break;
+                case Availability::Unavailable_Processing: statusStr = "加工中"; break;
+                default: break;
+                }
+                vm["status"] = statusStr;
+                vm["isAvailable"] = (v.enum_IsAvailable() == Availability::Available);
+
+                BookLocation loc = v.stct_Location();
+                vm["location"] = QString("分馆:%1 %2层 区:%3 %4架%5层")
+                    .arg(static_cast<int>(loc.libraryID)).arg(loc.floor)
+                    .arg(static_cast<int>(loc.areaID)).arg(loc.shelf).arg(loc.layer);
+                volList.append(vm);
+            }
+        }
+        res["volumes"] = volList;
+    }
+    return res;
+}
+
+// ----------------------------------------------------
+// 单册借阅
+// ----------------------------------------------------
+int SystemBridge::borrowVolume(const QString& isbn, const QString& volId) {
+    if (!m_currentReader.has_value() || m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    BookDAO dao;
+    QList<Book> books;
+    ErrorCode st = dao.getBookInfobyISBN(isbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(st);
+
+    Book bk = books[0];
+    st = dao.getVolumeInfo(bk); // 挂载单册列表
+    if (st != ErrorCode::SUCCESS) return static_cast<int>(st);
+
+    VolumeID vId; vId.SetValue(volId);
+    st = VolOperation::VolReserve(bk, vId, m_currentReader.value());
+    return static_cast<int>(st);
+}
+
+// ----------------------------------------------------
+// 图书维护业务 (Admin)
+// ----------------------------------------------------
+int SystemBridge::saveBook(const QString& isbn, const QString& title, const QString& author, const QString& press, int pubYear, int category, int language, const QString& intro) {
+    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+
+    Book bk;
+    ErrorCode st = bk.SetISBN(isbn);
+    if (st != ErrorCode::SUCCESS) return static_cast<int>(st);
+
+    bk.SetName(title);
+    bk.SetAuthor(author.split(","));
+    bk.SetPress(press);
+    bk.SetPubYear(pubYear);
+    bk.SetPubCategory(static_cast<Category>(category));
+    bk.SetPubLanguage(static_cast<Language>(language));
+    bk.SetIntroduction(intro);
+    bk.SetIsValid(true);
+
+    return static_cast<int>(BookOperation::BookUpdate(bk, m_currentAdmin.value()));
+}
+
+int SystemBridge::deleteBook(const QString& isbn) {
+    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    BookDAO dao;
+    QList<Book> books;
+    ErrorCode st = dao.getBookInfobyISBN(isbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(st);
+
+    Book bk = books[0];
+    dao.getVolumeInfo(bk);
+    return static_cast<int>(BookOperation::BookDelete(bk, m_currentAdmin.value()));
+}
+
+int SystemBridge::saveVolume(const QString& isbn, const QString& volId, int lib, int floor, int area, int shelf, int layer, int availability, bool isOpenshelf, const QString& note) {
+    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+
+    BookDAO dao;
+    QList<Book> books;
+    ErrorCode st = dao.getBookInfobyISBN(isbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(st);
+    Book bk = books[0];
+    dao.getVolumeInfo(bk);
+
+    Volume vol;
+    VolumeID vId;
+    if (vId.SetValue(volId) != ErrorCode::SUCCESS) return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    vol.SetVolID(vId);
+
+    BookLocation loc;
+    loc.libraryID = static_cast<Library>(lib);
+    loc.floor = floor; loc.areaID = static_cast<Area>(area); loc.shelf = shelf; loc.layer = layer;
+    vol.SetLocation(loc);
+
+    vol.SetAvailability(static_cast<Availability>(availability));
+    vol.SetIsOpenshelf(isOpenshelf);
+    vol.SetNote(note);
+    vol.SetIsValid(true);
+
+    return static_cast<int>(VolOperation::VolUpdate(bk, vol, m_currentAdmin.value()));
+}
+
+int SystemBridge::deleteVolume(const QString& isbn, const QString& volId) {
+    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+
+    BookDAO dao;
+    QList<Book> books;
+    if (dao.getBookInfobyISBN(isbn, books) != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(ErrorCode::NO_RESULT);
+    Book bk = books[0];
+    dao.getVolumeInfo(bk);
+
+    Volume vol;
+    VolumeID vId;
+    if (vId.SetValue(volId) != ErrorCode::SUCCESS) return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    vol.SetVolID(vId);
+    vol.SetIsValid(true);
+
+    return static_cast<int>(VolOperation::VolDelete(bk, vol, m_currentAdmin.value()));
 }

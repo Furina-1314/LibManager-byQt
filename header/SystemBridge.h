@@ -72,6 +72,25 @@ public:
     // 供系统管理员使用的全局借阅流水获取接口
     Q_INVOKABLE QVariantList getAllLoanRecords();
 
+    // 多条件组合高级检索接口
+    Q_INVOKABLE QVariantList advancedSearch(const QString& isbn, const QString& volId, int statusIndex, const QString& startDate, const QString& endDate);
+
+    // ----------------------------------------------------
+    // 图书业务核心接口
+    // ----------------------------------------------------
+    Q_INVOKABLE QVariantList searchBooks(const QString& keyword);
+    Q_INVOKABLE QVariantList getPopularBooks();
+    Q_INVOKABLE QVariantMap getBookDetails(const QString& isbn);
+
+    // 读者单册借阅
+    Q_INVOKABLE int borrowVolume(const QString& isbn, const QString& volId);
+
+    // 管理员图书维护接口
+    Q_INVOKABLE int saveBook(const QString& isbn, const QString& title, const QString& author, const QString& press, int pubYear, int category, int language, const QString& intro);
+    Q_INVOKABLE int deleteBook(const QString& isbn);
+    Q_INVOKABLE int saveVolume(const QString& isbn, const QString& volId, int lib, int floor, int area, int shelf, int layer, int availability, bool isOpenshelf, const QString& note);
+    Q_INVOKABLE int deleteVolume(const QString& isbn, const QString& volId);
+
 signals:
     void userInfoChanged();
     void loginError(const QString& errorMsg);
