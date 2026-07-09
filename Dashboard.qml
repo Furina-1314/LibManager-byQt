@@ -25,13 +25,15 @@ Item {
         {title: qsTr("主页"), idx: 0},
         {title: qsTr("图书业务"), idx: 1},
         {title: qsTr("借阅管理"), idx: 2},
-        {title: qsTr("个人信息"), idx: 3},
+        {title: qsTr("读者业务"), idx: 3},
         {title: qsTr("系统设置"), idx: 4}
     ]
 
     function getSubMenuModel(topMenuIdx) {
         switch(topMenuIdx) {
-            case 1: return root.isAdmin ? [qsTr("图书检索"), qsTr("热门图书"), qsTr("图书管理")] : [qsTr("图书检索"), qsTr("热门图书")];
+            case 1: return root.isAdmin ? 
+                [qsTr("图书检索"), qsTr("高级检索"), qsTr("热门图书"), qsTr("图书管理")] : 
+                [qsTr("图书检索"), qsTr("高级检索"), qsTr("热门图书")];
             case 2: return root.isAdmin ? [qsTr("流水查询"), qsTr("高级检索")] : [qsTr("借阅历史"), qsTr("高级检索"), qsTr("借阅统计")];
             case 3: return root.isAdmin ? [qsTr("账户资料")] : [qsTr("账户资料"), qsTr("修改信息")];
             case 4: return [qsTr("界面偏好"), qsTr("数据库连接状态"), qsTr("退出系统")];
@@ -66,7 +68,6 @@ Item {
     }
 
     function loadData() {
-        // 重置内部状态
         root.bookSearchViewIdx = 0;
         
         // 借阅管理 -> 流水/历史
@@ -74,15 +75,14 @@ Item {
             root.listModelA = root.isAdmin ? SystemBridge.getAllLoanRecords() : SystemBridge.getBorrowingHistory();
             root.currentPageA = 1;
         }
-        // 图书业务 -> 热门图书
-        else if (root.currentTopMenu === 1 && root.currentSubMenu === 1) {
+        // 图书业务 -> 热门图书 (请注意热门图书现在的索引顺延到了 2)
+        else if (root.currentTopMenu === 1 && root.currentSubMenu === 2) {
             root.listModelA = SystemBridge.getPopularBooks();
             root.currentPageA = 1;
         }
-        // 图书业务 -> 图书检索 (初始化为空)
-        else if (root.currentTopMenu === 1 && root.currentSubMenu === 0) {
-            root.listModelA = []; root.currentPageA = 1;
-        }
+        
+        // 🚨 严谨修正：移除此处针对 root.currentTopMenu === 1 && root.currentSubMenu === 0 时的 root.listModelA = [] 清空操作。
+        // 确保高级检索在切换视图回列表时，内存中的检索结果得以在界面驻留。
     }
 
     Rectangle {
@@ -194,62 +194,123 @@ Item {
                                             ColumnLayout {
                                                 anchors.fill: parent; spacing: 15
                                                 Label { text: qsTr("图书检索"); font.pixelSize: 32; font.weight: Font.Bold; color: root.textPrimary }
+                                                
                                                 RowLayout {
                                                     Layout.fillWidth: true; spacing: 15
-                                                    TextField { id: titleSearchInput; Layout.fillWidth: true; Layout.preferredHeight: 45; placeholderText: qsTr("输入图书标题或关键词"); font.pixelSize: 16; color: root.textPrimary; background: Rectangle { border.color: root.textPrimary; border.width: 1; color: "transparent" } }
-                                                    Button {
-                                                        text: qsTr("检索")
-                                                        Layout.preferredWidth: 100; Layout.preferredHeight: 45
-                                                        contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                                        background: Rectangle { color: root.textPrimary; radius: 2 }
-                                                        onClicked: { root.listModelA = SystemBridge.searchBooks(titleSearchInput.text); root.currentPageA = 1; }
+                                                    TextField {
+                                                    id: titleSearchInput
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 45 // 💡 关键修改：取消 fillHeight，恢复明确的固定高度
+                                                    placeholderText: qsTr("输入图书标题或关键词")
+                                                    font.pixelSize: 16
+                                                    color: root.textPrimary
+                                                    background: Rectangle {
+                                                        border.color: root.textPrimary
+                                                        border.width: 1
+                                                        color: "transparent"
+                                                    }
+                                                }                                                    
+                                                ColumnLayout {
+                                                        spacing: 5
+                                                        Button {
+                                                            text: qsTr("高级检索")
+                                                            Layout.preferredWidth: 100; Layout.preferredHeight: 30
+                                                            contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                            background: Rectangle { color: root.textPrimary; radius: 2 }
+                                                            onClicked: root.currentSubMenu = 1
+                                                        }
+                                                        Button {
+                                                            text: qsTr("检索")
+                                                            Layout.preferredWidth: 100; Layout.preferredHeight: 45
+                                                            contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                            background: Rectangle { color: root.textPrimary; radius: 2 }
+                                                            onClicked: { root.listModelA = SystemBridge.searchBooks(titleSearchInput.text); root.currentPageA = 1; }
+                                                        }
                                                     }
                                                 }
                                                 Rectangle { Layout.fillWidth: true; height: 1; color: root.textPrimary }
                                                 
-                                                // 图书结果列表 (方块排版)
+                                                // 图书结果列表
                                                 Item {
                                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                                    onHeightChanged: { let r = Math.floor(height / 100); root.tableCapacity = Math.max(5, r - (r%5)); root.currentPageA = 1; }
+                                                    onHeightChanged: { let r = Math.floor(height / 120);
+                                                    root.tableCapacity = Math.max(4, r - (r%4)); root.currentPageA = 1; }
                                                     ListView {
                                                         anchors.fill: parent; clip: true; interactive: false; model: root.paginatedDataA; spacing: 10
                                                         delegate: Rectangle {
-                                                            width: ListView.view.width; height: 90; color: "transparent"; border.color: root.textSecondary; border.width: 1
+                                                            // 🚨 核心修复：显式接收 ListView 注入的上下文属性
+                                                            required property var modelData
+                                                            required property int index
+
+                                                            width: ListView.view.width; height: 110; color: "transparent"; border.color: root.textSecondary; border.width: 1
+        
+                                                            // （如果您需要实现斑马线交替背景，可以通过 index 运算）
+                                                            // color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a")
+        
                                                             RowLayout {
                                                                 anchors.fill: parent; anchors.margins: 15; spacing: 20
+            
                                                                 ColumnLayout {
                                                                     Layout.fillWidth: true; spacing: 5
-                                                                    Label { text: modelData.title; font.pixelSize: 20; font.weight: Font.Bold; color: root.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                                    Label { text: qsTr("作者: %1 | 出版社: %2 | 出版年份: %3").arg(modelData.author).arg(modelData.press).arg(modelData.pubYear); font.pixelSize: 14; color: root.textSecondary; elide: Text.ElideRight; Layout.fillWidth: true }
+                
+                                                                    // 题名渲染（带空值兜底）
+                                                                    Label { 
+                                                                        text: modelData.title !== undefined ? modelData.title : "未知题名"
+                                                                        font.pixelSize: 20; font.weight: Font.Bold; color: root.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true 
+                                                                    }
+                
+                                                                    // 元数据渲染
+                                                                    Label { 
+                                                                        text: {
+                                                                            let a = modelData.author !== undefined ? modelData.author : "-";
+                                                                            let p = modelData.press !== undefined ? modelData.press : "-";
+                                                                            let y = modelData.pubYear !== undefined ? modelData.pubYear : "-";
+                                                                            return "作者: " + a + " | 出版社: " + p + " | 出版年份: " + y;
+                                                                        }
+                                                                        font.pixelSize: 14; color: root.textSecondary; elide: Text.ElideRight; Layout.fillWidth: true 
+                                                                    }
+                
+                                                                    // 物理馆藏状态渲染
+                                                                    Label { 
+                                                                        text: {
+                                                                            let av = modelData.availabilityStr !== undefined ? modelData.availabilityStr : "未知状态";
+                                                                            let lc = modelData.locationStr !== undefined ? modelData.locationStr : "无馆藏位置记录";
+                                                                            return "可用状态: " + av + " | 馆藏位置: " + lc;
+                                                                        }
+                                                                        font.pixelSize: 14; 
+                                                                        color: (modelData.availabilityStr !== undefined && modelData.availabilityStr === "可外借") ? "#16a34a" : root.textSecondary; 
+                                                                        elide: Text.ElideRight; Layout.fillWidth: true 
+                                                                    }
                                                                 }
+            
                                                                 Button {
                                                                     text: qsTr("查看详情")
                                                                     Layout.preferredWidth: 100; Layout.preferredHeight: 40; Layout.alignment: Qt.AlignVCenter
                                                                     contentItem: Text { text: parent.text; color: root.textPrimary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                                                     background: Rectangle { color: "transparent"; border.color: root.textPrimary; border.width: 1 }
                                                                     onClicked: {
-                                                                        root.currentBookDetails = SystemBridge.getBookDetails(modelData.isbn);
-                                                                        root.listModelB = root.currentBookDetails.volumes || [];
-                                                                        root.currentPageB = 1;
-                                                                        root.bookSearchViewIdx = 1;
+                                                                        if (modelData.isbn !== undefined) {
+                                                                            root.currentBookDetails = SystemBridge.getBookDetails(modelData.isbn);
+                                                                            root.listModelB = root.currentBookDetails.volumes || [];
+                                                                            root.currentPageB = 1;
+                                                                            root.bookSearchViewIdx = 1;
+                                                                        }
                                                                     }
                                                                 }
                                                             }
                                                         }
-                                                    }
+                                                    } 
                                                 }
-                                                // 底部分页
+                                                // 底部分页 (复用原结构)
                                                 RowLayout {
                                                     Layout.alignment: Qt.AlignHCenter; spacing: 20
                                                     Button { text: qsTr("上一页"); enabled: root.currentPageA > 1; onClicked: root.currentPageA--; background: Rectangle { color: "transparent" } }
                                                     Label { text: qsTr("第 %1 页 / 共 %2 页").arg(root.currentPageA).arg(root.totalPagesA); font.pixelSize: 16; color: root.textPrimary }
                                                     Button { text: qsTr("下一页"); enabled: root.currentPageA < root.totalPagesA; onClicked: root.currentPageA++; background: Rectangle { color: "transparent" } }
-                                                    TextField { id: jumpA; Layout.preferredWidth: 50; validator: IntValidator { bottom: 1; top: root.totalPagesA } }
-                                                    Button { text: "Go"; onClicked: { let p = parseInt(jumpA.text); if(p >= 1 && p <= root.totalPagesA) root.currentPageA = p; } }
                                                 }
                                             }
                                         }
-
+                                        
                                         // 子状态1：单本图书详情与单册列表
                                         Item {
                                             ColumnLayout {
@@ -277,16 +338,29 @@ Item {
                                                             }
                                                         }
                                                         ListView {
-                                                            Layout.fillWidth: true; Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataB
+                                                            Layout.fillWidth: true;
+                                                            Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataB
                                                             delegate: Rectangle {
-                                                                width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
+                                                                // 🚨 核心修复：显式开放输入接口，承接底层模型的上下文属性注入
+                                                                required property var modelData
+                                                                required property int index
+
+                                                                width: ListView.view.width;
+                                                                height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary;
+                                                                border.width: 1
                                                                 RowLayout {
-                                                                    anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
+                                                                    anchors.fill: parent;
+                                                                    anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                                     Button {
                                                                         text: qsTr("借阅")
-                                                                        Layout.preferredWidth: 80; Layout.preferredHeight: 35; enabled: modelData.isAvailable && !root.isAdmin
-                                                                        contentItem: Text { text: parent.text; color: parent.enabled ? root.bgPrimary : root.textSecondary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                                                        background: Rectangle { color: parent.enabled ? root.textPrimary : "transparent"; border.color: root.textPrimary; border.width: parent.enabled ? 0 : 1; radius: 2 }
+                                                                        Layout.preferredWidth: 80;
+                                                                        Layout.preferredHeight: 35; enabled: modelData.isAvailable && !root.isAdmin
+                                                                        contentItem: Text { text: parent.text;
+                                                                        color: parent.enabled ? root.bgPrimary : root.textSecondary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter;
+                                                                        verticalAlignment: Text.AlignVCenter }
+                                                                        background: Rectangle { color: parent.enabled ?
+                                                                        root.textPrimary : "transparent"; border.color: root.textPrimary; border.width: parent.enabled ? 0 : 1;
+                                                                        radius: 2 }
                                                                         onClicked: {
                                                                             let st = SystemBridge.borrowVolume(root.currentBookDetails.isbn, modelData.volId);
                                                                             if(st === 0) {
@@ -295,13 +369,25 @@ Item {
                                                                             }
                                                                         }
                                                                     }
-                                                                    Label { text: modelData.volId; color: root.textPrimary; Layout.preferredWidth: 150; font.weight: Font.Bold }
-                                                                    Label { text: modelData.status; color: modelData.isAvailable ? "#16a34a" : root.textSecondary; Layout.preferredWidth: 100 }
-                                                                    Label { text: modelData.location; color: root.textSecondary; Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 }
+                                                                    
+                                                                    // 💡 显式绑定与属性防御性校验
+                                                                    Label { 
+                                                                        text: modelData.volId !== undefined ? modelData.volId : "-"
+                                                                        color: root.textPrimary;
+                                                                        Layout.preferredWidth: 150; font.weight: Font.Bold 
+                                                                    }
+                                                                    Label { 
+                                                                        text: modelData.status !== undefined ? modelData.status : "-"
+                                                                        color: (modelData.isAvailable !== undefined && modelData.isAvailable) ? "#16a34a" : root.textSecondary; 
+                                                                        Layout.preferredWidth: 100 
+                                                                    }
+                                                                    Label { 
+                                                                        text: modelData.location !== undefined ? modelData.location : "-"
+                                                                        color: root.textSecondary; Layout.fillWidth: true; wrapMode: Text.Wrap; maximumLineCount: 2 
+                                                                    }
                                                                 }
                                                             }
-                                                        }
-                                                    }
+                                                        }                                                    }
                                                 }
                                                 RowLayout {
                                                     Layout.alignment: Qt.AlignHCenter; spacing: 20
@@ -314,7 +400,48 @@ Item {
                                     }
                                 }
 
-                                // 1.1 热门图书
+                                // 1.1 高级检索 (新增)
+                                Item {
+                                    ColumnLayout {
+                                        anchors.fill: parent; spacing: 15
+                                        Label { text: qsTr("高级检索"); font.pixelSize: 32; font.weight: Font.Bold; color: root.textPrimary }
+                                        Rectangle { Layout.fillWidth: true; height: 1; color: root.textPrimary }
+
+                                        GridLayout {
+                                            columns: 4; rowSpacing: 15; columnSpacing: 20
+                                            Label { text: qsTr("书名:"); color: root.textPrimary; font.pixelSize: 16 }
+                                            TextField { id: sBookTitle; Layout.preferredWidth: 200; font.pixelSize: 14; background: Rectangle{ color: "transparent"; border.color: root.textSecondary; border.width: 1 } }
+                                            Label { text: qsTr("作者:"); color: root.textPrimary; font.pixelSize: 16 }
+                                            TextField { id: sBookAuthor; Layout.preferredWidth: 200; font.pixelSize: 14; background: Rectangle{ color: "transparent"; border.color: root.textSecondary; border.width: 1 } }
+                                            Label { text: qsTr("出版社:"); color: root.textPrimary; font.pixelSize: 16 }
+                                            TextField { id: sBookPress; Layout.preferredWidth: 200; font.pixelSize: 14; background: Rectangle{ color: "transparent"; border.color: root.textSecondary; border.width: 1 } }
+                                            Label { text: qsTr("ISBN:"); color: root.textPrimary; font.pixelSize: 16 }
+                                            TextField { id: sBookIsbn; Layout.preferredWidth: 200; font.pixelSize: 14; background: Rectangle{ color: "transparent"; border.color: root.textSecondary; border.width: 1 } }
+                                            Item { Layout.fillWidth: true; Layout.columnSpan: 2 }
+                                            Button {
+                                                text: qsTr("综合筛选")
+                                                Layout.columnSpan: 2; Layout.alignment: Qt.AlignRight; Layout.preferredWidth: 120; Layout.preferredHeight: 40; Layout.topMargin: 10
+                                                contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: root.textPrimary; radius: 3 }
+                                                onClicked: { 
+                                                    try {
+                                                        // 执行多维检索
+                                                        root.listModelA = SystemBridge.advancedSearchBooks(sBookTitle.text, sBookAuthor.text, sBookPress.text, sBookIsbn.text);
+                                                        root.currentPageA = 1; 
+                                                        // 若上一步成功，才会发生视图栈状态机的流转
+                                                        root.currentSubMenu = 0; 
+                                                    } catch (e) {
+                                                        console.error("跨界调用受阻，未能触发检索动作:", e);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Rectangle { Layout.fillWidth: true; height: 1; color: root.textPrimary; Layout.topMargin: 10 }
+                                        Item { Layout.fillWidth: true; Layout.fillHeight: true } // 占位符
+                                    }
+                                }
+
+                                // 1.2 热门图书
                                 Item {
                                     ColumnLayout {
                                         anchors.fill: parent; spacing: 15
@@ -347,7 +474,7 @@ Item {
                                     }
                                 }
 
-                                // 1.2 图书管理 (Admin)
+                                // 1.3 图书管理 (Admin)
                                 Item {
                                     Label { text: qsTr("图书管理与录入维护操作界面装载点"); font.pixelSize: 20; color: root.textSecondary; anchors.centerIn: parent }
                                 }

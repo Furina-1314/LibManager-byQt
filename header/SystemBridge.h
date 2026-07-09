@@ -79,6 +79,8 @@ public:
     // 图书业务核心接口
     // ----------------------------------------------------
     Q_INVOKABLE QVariantList searchBooks(const QString& keyword);
+    // 新增高级检索接口
+    Q_INVOKABLE QVariantList advancedSearchBooks(const QString& title, const QString& author, const QString& press, const QString& isbn);
     Q_INVOKABLE QVariantList getPopularBooks();
     Q_INVOKABLE QVariantMap getBookDetails(const QString& isbn);
 

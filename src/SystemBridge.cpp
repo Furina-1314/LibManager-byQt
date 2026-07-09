@@ -6,6 +6,27 @@
 #include <QVariantMap>
 #include <algorithm>
 
+// 辅助函数，用于转换馆藏位置枚举
+static QString formatLocation(const BookLocation& loc) {
+    QString libStr, areaStr;
+    switch (loc.libraryID) {
+    case Library::LIB_North: libStr = "主馆北馆"; break;
+    case Library::LIB_West: libStr = "主馆西馆"; break;
+    case Library::LIB_Economic: libStr = "经管图书馆"; break;
+    case Library::LIB_Literature: libStr = "人文社科图书馆"; break;
+    case Library::LIB_Law: libStr = "法律图书馆"; break;
+    default: libStr = "未知馆"; break;
+    }
+    switch (loc.areaID) {
+    case Area::AREA_E: areaStr = "东区"; break;
+    case Area::AREA_W: areaStr = "西区"; break;
+    case Area::AREA_S: areaStr = "南区"; break;
+    case Area::AREA_N: areaStr = "北区"; break;
+    default: areaStr = "未知区"; break;
+    }
+    return QString("%1  %2层  %3  %4架  %5层").arg(libStr).arg(loc.floor).arg(areaStr).arg(loc.shelf).arg(loc.layer);
+}
+
 // ==========================================
 // 属性 Getter 实现
 // ==========================================
@@ -418,16 +439,104 @@ QVariantList SystemBridge::searchBooks(const QString& keyword) {
     QList<Book> books;
     QList<QString> kws;
     if (!keyword.trimmed().isEmpty()) kws.append(keyword.trimmed());
-    else kws.append(""); // 传入空字符串通配符以拉取全量合法数据
+    else kws.append("");
 
     if (dao.getBookInfobyTitle(kws, books) == ErrorCode::SUCCESS) {
-        for (const auto& b : books) {
+        for (Book& b : books) {
             QVariantMap m;
             m["isbn"] = b.c_BookISBN().qs_Value();
             m["title"] = b.qs_Name();
             m["author"] = b.ql_Author().join(", ");
             m["press"] = b.qs_Press();
             m["pubYear"] = b.i_PubYear();
+
+            // 挂载单册信息以判定可用性与馆藏地
+            dao.getVolumeInfo(b);
+            bool hasAvailable = false;
+            QString locStr = "无馆藏信息";
+            const auto& vols = b.ql_VolumeList();
+
+            if (!vols.isEmpty()) {
+                for (const auto& v : vols) {
+                    if (v.enum_IsAvailable() == Availability::Available) {
+                        hasAvailable = true;
+                        locStr = formatLocation(v.stct_Location());
+                        if (vols.size() > 1) locStr += " 等馆藏地";
+                        break;
+                    }
+                }
+                // 若无可用单册，但存在实体，则默认展示第一本单册的位置
+                if (!hasAvailable) {
+                    locStr = formatLocation(vols[0].stct_Location());
+                    if (vols.size() > 1) locStr += " 等馆藏地";
+                }
+            }
+
+            m["availabilityStr"] = hasAvailable ? "可外借" : "不可用";
+            m["locationStr"] = locStr;
+            res.append(m);
+        }
+    }
+    return res;
+}
+
+// ----------------------------------------------------
+// 高级检索核心逻辑 (新增)
+// ----------------------------------------------------
+QVariantList SystemBridge::advancedSearchBooks(const QString& title, const QString& author, const QString& press, const QString& isbn) {
+    QVariantList res;
+    BookDAO dao;
+    QList<Book> books;
+    QList<QString> kws;
+    kws.append(""); // 传入空字符串通配符以拉取全量合法数据，在内存中进行多维过滤
+
+    if (dao.getBookInfobyTitle(kws, books) == ErrorCode::SUCCESS) {
+        for (Book& b : books) {
+            // 多维度联合过滤
+            if (!title.trimmed().isEmpty() && !b.qs_Name().contains(title.trimmed(), Qt::CaseInsensitive)) continue;
+            if (!isbn.trimmed().isEmpty() && !b.c_BookISBN().qs_Value().contains(isbn.trimmed(), Qt::CaseInsensitive)) continue;
+            if (!press.trimmed().isEmpty() && !b.qs_Press().contains(press.trimmed(), Qt::CaseInsensitive)) continue;
+
+            if (!author.trimmed().isEmpty()) {
+                bool authorMatch = false;
+                for (const QString& a : b.ql_Author()) {
+                    if (a.contains(author.trimmed(), Qt::CaseInsensitive)) {
+                        authorMatch = true;
+                        break;
+                    }
+                }
+                if (!authorMatch) continue;
+            }
+
+            QVariantMap m;
+            m["isbn"] = b.c_BookISBN().qs_Value();
+            m["title"] = b.qs_Name();
+            m["author"] = b.ql_Author().join(", ");
+            m["press"] = b.qs_Press();
+            m["pubYear"] = b.i_PubYear();
+
+            dao.getVolumeInfo(b);
+            bool hasAvailable = false;
+            QString locStr = "无馆藏信息";
+            const auto& vols = b.ql_VolumeList();
+
+            if (!vols.isEmpty()) {
+                for (const auto& v : vols) {
+                    if (v.enum_IsAvailable() == Availability::Available) {
+                        hasAvailable = true;
+                        locStr = formatLocation(v.stct_Location());
+                        if (vols.size() > 1) locStr += " 等馆藏地";
+                        break;
+                    }
+                }
+                if (!hasAvailable) {
+                    locStr = formatLocation(vols[0].stct_Location());
+                    if (vols.size() > 1) locStr += " 等馆藏地";
+                }
+            }
+
+            m["availabilityStr"] = hasAvailable ? "可外借" : "不可用";
+            m["locationStr"] = locStr;
             res.append(m);
         }
     }
@@ -471,10 +580,16 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
                 QVariantMap vm;
                 vm["volId"] = v.c_VolID().qs_Value();
 
+                // 1. 状态判断及超期/到期时间括注逻辑
                 QString statusStr = "未知";
                 switch (v.enum_IsAvailable()) {
                 case Availability::Available: statusStr = "在馆可借"; break;
-                case Availability::Unavailable_OnLoan: statusStr = "已借出"; break;
+                case Availability::Unavailable_OnLoan:
+                    statusStr = "已借出";
+                    if (v.qd_DueDate().isValid()) {
+                        statusStr += QString("(%1)").arg(v.qd_DueDate().toString("yyyy-MM-dd"));
+                    }
+                    break;
                 case Availability::Unavailable_Lost: statusStr = "遗失"; break;
                 case Availability::Unavailable_Processing: statusStr = "加工中"; break;
                 default: break;
@@ -482,10 +597,26 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
                 vm["status"] = statusStr;
                 vm["isAvailable"] = (v.enum_IsAvailable() == Availability::Available);
 
+                // 2. 规范化单册在详情页的馆藏位置解析
                 BookLocation loc = v.stct_Location();
-                vm["location"] = QString("分馆:%1 %2层 区:%3 %4架%5层")
-                    .arg(static_cast<int>(loc.libraryID)).arg(loc.floor)
-                    .arg(static_cast<int>(loc.areaID)).arg(loc.shelf).arg(loc.layer);
+                QString libStr, areaStr;
+                switch (loc.libraryID) {
+                case Library::LIB_North: libStr = "主馆北馆"; break;
+                case Library::LIB_West: libStr = "主馆西馆"; break;
+                case Library::LIB_Economic: libStr = "经管图书馆"; break;
+                case Library::LIB_Literature: libStr = "人文社科图书馆"; break;
+                case Library::LIB_Law: libStr = "法律图书馆"; break;
+                default: libStr = "未知分馆"; break;
+                }
+                switch (loc.areaID) {
+                case Area::AREA_E: areaStr = "东区"; break;
+                case Area::AREA_W: areaStr = "西区"; break;
+                case Area::AREA_S: areaStr = "南区"; break;
+                case Area::AREA_N: areaStr = "北区"; break;
+                default: areaStr = "未知区域"; break;
+                }
+                vm["location"] = QString("%1  %2层  %3  %4架  %5层").arg(libStr).arg(loc.floor).arg(areaStr).arg(loc.shelf).arg(loc.layer);
+
                 volList.append(vm);
             }
         }
