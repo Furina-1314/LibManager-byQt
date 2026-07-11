@@ -47,7 +47,7 @@ Item {
     property int rowHeight: 65
     property int tableCapacity: 5 
 
-    property var listModelA: [] // 通用列表模型 (借阅历史/流水查询/图书检索)
+    property var listModelA: [] // 通用列表模型 (借阅历史/流水查询/图书检索/热门图书)
     property int currentPageA: 1
     property var paginatedDataA: { let p = currentPageA; let limit = tableCapacity; return listModelA.slice((p-1)*limit, p*limit); }
     property int totalPagesA: Math.max(1, Math.ceil(listModelA.length / tableCapacity))
@@ -75,14 +75,12 @@ Item {
             root.listModelA = root.isAdmin ? SystemBridge.getAllLoanRecords() : SystemBridge.getBorrowingHistory();
             root.currentPageA = 1;
         }
-        // 图书业务 -> 热门图书 (请注意热门图书现在的索引顺延到了 2)
+        // 图书业务 -> 热门图书
         else if (root.currentTopMenu === 1 && root.currentSubMenu === 2) {
             root.listModelA = SystemBridge.getPopularBooks();
             root.currentPageA = 1;
         }
-        
-        // 🚨 严谨修正：移除此处针对 root.currentTopMenu === 1 && root.currentSubMenu === 0 时的 root.listModelA = [] 清空操作。
-        // 确保高级检索在切换视图回列表时，内存中的检索结果得以在界面驻留。
+        // 注意：移除了图书检索与高级检索时强制清空 listModelA 的逻辑，防止生命周期冲突导致结果被清空
     }
 
     Rectangle {
@@ -198,19 +196,19 @@ Item {
                                                 RowLayout {
                                                     Layout.fillWidth: true; spacing: 15
                                                     TextField {
-                                                    id: titleSearchInput
-                                                    Layout.fillWidth: true
-                                                    Layout.preferredHeight: 45 // 💡 关键修改：取消 fillHeight，恢复明确的固定高度
-                                                    placeholderText: qsTr("输入图书标题或关键词")
-                                                    font.pixelSize: 16
-                                                    color: root.textPrimary
-                                                    background: Rectangle {
-                                                        border.color: root.textPrimary
-                                                        border.width: 1
-                                                        color: "transparent"
-                                                    }
-                                                }                                                    
-                                                ColumnLayout {
+                                                        id: titleSearchInput
+                                                        Layout.fillWidth: true
+                                                        Layout.preferredHeight: 45 // 修复无限拉伸的高度膨胀问题
+                                                        placeholderText: qsTr("输入图书标题或关键词")
+                                                        font.pixelSize: 16
+                                                        color: root.textPrimary
+                                                        background: Rectangle {
+                                                            border.color: root.textPrimary
+                                                            border.width: 1
+                                                            color: "transparent"
+                                                        }
+                                                    }                                                    
+                                                    ColumnLayout {
                                                         spacing: 5
                                                         Button {
                                                             text: qsTr("高级检索")
@@ -233,33 +231,26 @@ Item {
                                                 // 图书结果列表
                                                 Item {
                                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                                    onHeightChanged: { let r = Math.floor(height / 120);
-                                                    root.tableCapacity = Math.max(4, r - (r%4)); root.currentPageA = 1; }
+                                                    onHeightChanged: { let r = Math.floor(height / 120); root.tableCapacity = Math.max(4, r - (r%4)); root.currentPageA = 1; }
                                                     ListView {
                                                         anchors.fill: parent; clip: true; interactive: false; model: root.paginatedDataA; spacing: 10
                                                         delegate: Rectangle {
-                                                            // 🚨 核心修复：显式接收 ListView 注入的上下文属性
+                                                            // 显式声明属性，解决严格作用域下的 ReferenceError
                                                             required property var modelData
                                                             required property int index
 
                                                             width: ListView.view.width; height: 110; color: "transparent"; border.color: root.textSecondary; border.width: 1
-        
-                                                            // （如果您需要实现斑马线交替背景，可以通过 index 运算）
-                                                            // color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a")
-        
                                                             RowLayout {
                                                                 anchors.fill: parent; anchors.margins: 15; spacing: 20
-            
                                                                 ColumnLayout {
                                                                     Layout.fillWidth: true; spacing: 5
-                
-                                                                    // 题名渲染（带空值兜底）
+                                                                    
+                                                                    // 题名渲染（带空值兜底防御）
                                                                     Label { 
                                                                         text: modelData.title !== undefined ? modelData.title : "未知题名"
                                                                         font.pixelSize: 20; font.weight: Font.Bold; color: root.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true 
                                                                     }
-                
-                                                                    // 元数据渲染
+                                                                    // 元数据渲染（利用原生 JS 拼接，彻底隔绝 TypeError）
                                                                     Label { 
                                                                         text: {
                                                                             let a = modelData.author !== undefined ? modelData.author : "-";
@@ -269,11 +260,10 @@ Item {
                                                                         }
                                                                         font.pixelSize: 14; color: root.textSecondary; elide: Text.ElideRight; Layout.fillWidth: true 
                                                                     }
-                
                                                                     // 物理馆藏状态渲染
                                                                     Label { 
                                                                         text: {
-                                                                            let av = modelData.availabilityStr !== undefined ? modelData.availabilityStr : "未知状态";
+                                                                            let av = modelData.availabilityStr !== undefined ? modelData.availabilityStr : "未知状态(需更新后端)";
                                                                             let lc = modelData.locationStr !== undefined ? modelData.locationStr : "无馆藏位置记录";
                                                                             return "可用状态: " + av + " | 馆藏位置: " + lc;
                                                                         }
@@ -282,7 +272,6 @@ Item {
                                                                         elide: Text.ElideRight; Layout.fillWidth: true 
                                                                     }
                                                                 }
-            
                                                                 Button {
                                                                     text: qsTr("查看详情")
                                                                     Layout.preferredWidth: 100; Layout.preferredHeight: 40; Layout.alignment: Qt.AlignVCenter
@@ -301,7 +290,7 @@ Item {
                                                         }
                                                     } 
                                                 }
-                                                // 底部分页 (复用原结构)
+                                                // 底部分页
                                                 RowLayout {
                                                     Layout.alignment: Qt.AlignHCenter; spacing: 20
                                                     Button { text: qsTr("上一页"); enabled: root.currentPageA > 1; onClicked: root.currentPageA--; background: Rectangle { color: "transparent" } }
@@ -338,29 +327,20 @@ Item {
                                                             }
                                                         }
                                                         ListView {
-                                                            Layout.fillWidth: true;
-                                                            Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataB
+                                                            Layout.fillWidth: true; Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataB
                                                             delegate: Rectangle {
-                                                                // 🚨 核心修复：显式开放输入接口，承接底层模型的上下文属性注入
+                                                                // 显式声明属性防御
                                                                 required property var modelData
                                                                 required property int index
 
-                                                                width: ListView.view.width;
-                                                                height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary;
-                                                                border.width: 1
+                                                                width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
                                                                 RowLayout {
-                                                                    anchors.fill: parent;
-                                                                    anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
+                                                                    anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                                     Button {
-                                                                        text: qsTr("借阅")
-                                                                        Layout.preferredWidth: 80;
-                                                                        Layout.preferredHeight: 35; enabled: modelData.isAvailable && !root.isAdmin
-                                                                        contentItem: Text { text: parent.text;
-                                                                        color: parent.enabled ? root.bgPrimary : root.textSecondary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter;
-                                                                        verticalAlignment: Text.AlignVCenter }
-                                                                        background: Rectangle { color: parent.enabled ?
-                                                                        root.textPrimary : "transparent"; border.color: root.textPrimary; border.width: parent.enabled ? 0 : 1;
-                                                                        radius: 2 }
+                                                                        text: (modelData.isAvailable && !root.isAdmin)?qsTr("借阅"):qsTr("不可借")
+                                                                        Layout.preferredWidth: 80; Layout.preferredHeight: 35; enabled: modelData.isAvailable && !root.isAdmin
+                                                                        contentItem: Text { text: parent.text; color: parent.enabled ? root.bgPrimary : root.textSecondary; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                                        background: Rectangle { color: parent.enabled ? root.textPrimary : "transparent"; border.color: root.textPrimary; border.width: parent.enabled ? 0 : 1; radius: 2 }
                                                                         onClicked: {
                                                                             let st = SystemBridge.borrowVolume(root.currentBookDetails.isbn, modelData.volId);
                                                                             if(st === 0) {
@@ -370,16 +350,14 @@ Item {
                                                                         }
                                                                     }
                                                                     
-                                                                    // 💡 显式绑定与属性防御性校验
+                                                                    // 严谨校验与防御
                                                                     Label { 
                                                                         text: modelData.volId !== undefined ? modelData.volId : "-"
-                                                                        color: root.textPrimary;
-                                                                        Layout.preferredWidth: 150; font.weight: Font.Bold 
+                                                                        color: root.textPrimary; Layout.preferredWidth: 150; font.weight: Font.Bold 
                                                                     }
                                                                     Label { 
                                                                         text: modelData.status !== undefined ? modelData.status : "-"
-                                                                        color: (modelData.isAvailable !== undefined && modelData.isAvailable) ? "#16a34a" : root.textSecondary; 
-                                                                        Layout.preferredWidth: 100 
+                                                                        color: (modelData.isAvailable !== undefined && modelData.isAvailable) ? "#16a34a" : root.textSecondary; Layout.preferredWidth: 100 
                                                                     }
                                                                     Label { 
                                                                         text: modelData.location !== undefined ? modelData.location : "-"
@@ -387,7 +365,8 @@ Item {
                                                                     }
                                                                 }
                                                             }
-                                                        }                                                    }
+                                                        }                                                    
+                                                    }
                                                 }
                                                 RowLayout {
                                                     Layout.alignment: Qt.AlignHCenter; spacing: 20
@@ -425,11 +404,9 @@ Item {
                                                 background: Rectangle { color: root.textPrimary; radius: 3 }
                                                 onClicked: { 
                                                     try {
-                                                        // 执行多维检索
                                                         root.listModelA = SystemBridge.advancedSearchBooks(sBookTitle.text, sBookAuthor.text, sBookPress.text, sBookIsbn.text);
                                                         root.currentPageA = 1; 
-                                                        // 若上一步成功，才会发生视图栈状态机的流转
-                                                        root.currentSubMenu = 0; 
+                                                        root.currentSubMenu = 0; // 回跳到结果列表视图渲染
                                                     } catch (e) {
                                                         console.error("跨界调用受阻，未能触发检索动作:", e);
                                                     }
@@ -453,13 +430,20 @@ Item {
                                             ListView {
                                                 anchors.fill: parent; clip: true; interactive: false; model: root.paginatedDataA; spacing: 10
                                                 delegate: Rectangle {
+                                                    required property var modelData
+                                                    required property int index
+                                                    
                                                     width: ListView.view.width; height: 90; color: "transparent"; border.color: root.textSecondary; border.width: 1
                                                     RowLayout {
                                                         anchors.fill: parent; anchors.margins: 15; spacing: 20
                                                         ColumnLayout {
                                                             Layout.fillWidth: true; spacing: 5
-                                                            Label { text: modelData.title; font.pixelSize: 20; font.weight: Font.Bold; color: root.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                            Label { text: qsTr("作者: %1 | 累计借阅: %2 次").arg(modelData.author).arg(modelData.borrowCount); font.pixelSize: 14; color: root.textSecondary; Layout.fillWidth: true }
+                                                            // 严谨防御
+                                                            Label { text: modelData.title || "未知"; font.pixelSize: 20; font.weight: Font.Bold; color: root.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                            Label { 
+                                                                text: qsTr("作者: %1 | 累计借阅: %2 次").arg(modelData.author || "-").arg(modelData.borrowCount || 0); 
+                                                                font.pixelSize: 14; color: root.textSecondary; Layout.fillWidth: true 
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -558,16 +542,21 @@ Item {
                                                 ListView {
                                                     Layout.fillWidth: true; Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataA
                                                     delegate: Rectangle {
+                                                        required property var modelData
+                                                        required property int index
+                                                        
                                                         width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
                                                         RowLayout {
                                                             anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                             Label { text: (root.currentPageA - 1) * root.tableCapacity + index + 1; color: root.textSecondary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
-                                                            Label { text: modelData.borrowerId; color: root.textSecondary; Layout.preferredWidth: 100; visible: root.isAdmin }
-                                                            Label { text: modelData.title; color: root.textPrimary; font.weight: Font.Bold; Layout.fillWidth: true; Layout.minimumWidth: 150; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2 }
-                                                            Label { text: modelData.author; color: root.textSecondary; Layout.preferredWidth: 100; elide: Text.ElideRight }
-                                                            Label { text: modelData.status; color: modelData.status === "已逾期" ? root.textPrimary : root.textSecondary; font.weight: modelData.status === "已逾期" ? Font.Bold : Font.Normal; Layout.preferredWidth: 80 }
-                                                            Label { text: modelData.borrowDate; color: root.textSecondary; Layout.preferredWidth: 90 }
-                                                            Label { text: modelData.dueDate; color: root.textSecondary; Layout.preferredWidth: 90 }
+                                                            
+                                                            // 🛡️ 严谨防御：使用 || "-" 拦截跨模型污染产生的 undefined
+                                                            Label { text: modelData.borrowerId || "-"; color: root.textSecondary; Layout.preferredWidth: 100; visible: root.isAdmin }
+                                                            Label { text: modelData.title || "-"; color: root.textPrimary; font.weight: Font.Bold; Layout.fillWidth: true; Layout.minimumWidth: 150; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2 }
+                                                            Label { text: modelData.author || "-"; color: root.textSecondary; Layout.preferredWidth: 100; elide: Text.ElideRight }
+                                                            Label { text: modelData.status || "-"; color: modelData.status === "已逾期" ? root.textPrimary : root.textSecondary; font.weight: modelData.status === "已逾期" ? Font.Bold : Font.Normal; Layout.preferredWidth: 80 }
+                                                            Label { text: modelData.borrowDate || "-"; color: root.textSecondary; Layout.preferredWidth: 90 }
+                                                            Label { text: modelData.dueDate || "-"; color: root.textSecondary; Layout.preferredWidth: 90 }
                                                         }
                                                     }
                                                 }
@@ -636,16 +625,21 @@ Item {
                                                 ListView {
                                                     Layout.fillWidth: true; Layout.fillHeight: true; clip: true; interactive: false; model: root.paginatedDataB
                                                     delegate: Rectangle {
+                                                        required property var modelData
+                                                        required property int index
+                                                        
                                                         width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
                                                         RowLayout {
                                                             anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                             Label { text: (root.currentPageB - 1) * root.tableCapacity + index + 1; color: root.textSecondary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
-                                                            Label { text: modelData.borrowerId; color: root.textSecondary; Layout.preferredWidth: 100; visible: root.isAdmin }
-                                                            Label { text: modelData.title; color: root.textPrimary; font.weight: Font.Bold; Layout.fillWidth: true; Layout.minimumWidth: 150; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2 }
-                                                            Label { text: modelData.author; color: root.textSecondary; Layout.preferredWidth: 100; elide: Text.ElideRight }
-                                                            Label { text: modelData.status; color: modelData.status === "已逾期" ? root.textPrimary : root.textSecondary; font.weight: modelData.status === "已逾期" ? Font.Bold : Font.Normal; Layout.preferredWidth: 80 }
-                                                            Label { text: modelData.borrowDate; color: root.textSecondary; Layout.preferredWidth: 90 }
-                                                            Label { text: modelData.dueDate; color: root.textSecondary; Layout.preferredWidth: 90 }
+                                                            
+                                                            // 🛡️ 严谨防御
+                                                            Label { text: modelData.borrowerId || "-"; color: root.textSecondary; Layout.preferredWidth: 100; visible: root.isAdmin }
+                                                            Label { text: modelData.title || "-"; color: root.textPrimary; font.weight: Font.Bold; Layout.fillWidth: true; Layout.minimumWidth: 150; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2 }
+                                                            Label { text: modelData.author || "-"; color: root.textSecondary; Layout.preferredWidth: 100; elide: Text.ElideRight }
+                                                            Label { text: modelData.status || "-"; color: modelData.status === "已逾期" ? root.textPrimary : root.textSecondary; font.weight: modelData.status === "已逾期" ? Font.Bold : Font.Normal; Layout.preferredWidth: 80 }
+                                                            Label { text: modelData.borrowDate || "-"; color: root.textSecondary; Layout.preferredWidth: 90 }
+                                                            Label { text: modelData.dueDate || "-"; color: root.textSecondary; Layout.preferredWidth: 90 }
                                                         }
                                                     }
                                                 }

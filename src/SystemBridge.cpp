@@ -629,19 +629,51 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
 // 单册借阅
 // ----------------------------------------------------
 int SystemBridge::borrowVolume(const QString& isbn, const QString& volId) {
-    if (!m_currentReader.has_value() || m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
-    BookDAO dao;
-    QList<Book> books;
-    ErrorCode st = dao.getBookInfobyISBN(isbn, books);
-    if (st != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(st);
+    QSqlDatabase db = QSqlDatabase::database(); // 获取默认连接
 
-    Book bk = books[0];
-    st = dao.getVolumeInfo(bk); // 挂载单册列表
-    if (st != ErrorCode::SUCCESS) return static_cast<int>(st);
+    // 1. 防御性检查：清理可能存在的悬挂事务
+    if (db.transaction() == false) {
+        qWarning() << "检测到悬挂事务，强制回滚重置状态...";
+        db.rollback();
+        if (!db.transaction()) {
+            qCritical() << "事务开启遭遇致命失败:" << db.lastError().text();
+            return -1;
+        }
+    }
 
-    VolumeID vId; vId.SetValue(volId);
-    st = VolOperation::VolReserve(bk, vId, m_currentReader.value());
-    return static_cast<int>(st);
+    // 2. 利用局部作用域严格控制查询对象的生命周期，确保读锁及时释放
+    bool checkPassed = false;
+    {
+        QSqlQuery checkQuery(db);
+        checkQuery.prepare("SELECT IsAvailable FROM Volume WHERE VolID = :volId");
+        checkQuery.bindValue(":volId", volId);
+        if (checkQuery.exec() && checkQuery.next()) {
+            int status = checkQuery.value(0).toInt();
+            if (status == 1) { // 假设 1 代表 Available
+                checkPassed = true;
+            }
+        }
+        checkQuery.finish(); // 💡 必须显式释放语句句柄，清除共享锁
+    } // checkQuery 析构，进一步确保资源释放
+
+    if (!checkPassed) {
+        db.rollback();
+        return 0; // 条件不满足，安全退出
+    }
+
+    // 3. 执行核心写入逻辑
+    QSqlQuery updateQuery(db);
+    updateQuery.prepare("UPDATE Volume SET IsAvailable = 0 WHERE VolID = :volId");
+    updateQuery.bindValue(":volId", volId);
+
+    if (updateQuery.exec()) {
+        db.commit(); // 提交事务
+        return 1;    // 成功
+    }
+    else {
+        db.rollback(); // 发生异常，回滚事务
+        return -1;
+    }
 }
 
 // ----------------------------------------------------
