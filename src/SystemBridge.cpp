@@ -208,6 +208,8 @@ QVariantList SystemBridge::getBorrowingHistory() {
     BookDAO bDAO;
     for (const LoanRecord& lr : records) {
         QVariantMap map;
+        map["isbn"] = lr.c_ISBN().qs_Value();
+        map["volId"] = lr.c_VolID().qs_Value();
         map["borrowerId"] = lr.c_BorrowerID().qs_Value();
         map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
         map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
@@ -268,6 +270,8 @@ QVariantList SystemBridge::getAllLoanRecords() {
     BookDAO bDAO;
     for (const LoanRecord& lr : records) {
         QVariantMap map;
+        map["isbn"] = lr.c_ISBN().qs_Value();
+        map["volId"] = lr.c_VolID().qs_Value();
         map["borrowerId"] = lr.c_BorrowerID().qs_Value();
         map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
         map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
@@ -395,6 +399,8 @@ QVariantList SystemBridge::advancedSearch(const QString& isbn, const QString& vo
     BookDAO bDAO;
     for (const LoanRecord& lr : records) {
         QVariantMap map;
+        map["isbn"] = lr.c_ISBN().qs_Value();
+        map["volId"] = lr.c_VolID().qs_Value();
         map["borrowerId"] = lr.c_BorrowerID().qs_Value();
         map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
         map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
@@ -438,8 +444,14 @@ QVariantList SystemBridge::searchBooks(const QString& keyword) {
     BookDAO dao;
     QList<Book> books;
     QList<QString> kws;
-    if (!keyword.trimmed().isEmpty()) kws.append(keyword.trimmed());
-    else kws.append("");
+
+    // 严谨的分词正则：匹配任意连续的空白字符或加号
+    static const QRegularExpression re("[\\s\\+]+");
+    QStringList parts = keyword.trimmed().split(re, Qt::SkipEmptyParts);
+    for (const QString& p : parts) {
+        kws.append(p);
+    }
+    if (kws.isEmpty()) kws.append(""); // 兜底空通配符，获取全库数据
 
     if (dao.getBookInfobyTitle(kws, books) == ErrorCode::SUCCESS) {
         for (Book& b : books) {
@@ -450,7 +462,6 @@ QVariantList SystemBridge::searchBooks(const QString& keyword) {
             m["press"] = b.qs_Press();
             m["pubYear"] = b.i_PubYear();
 
-            // 挂载单册信息以判定可用性与馆藏地
             dao.getVolumeInfo(b);
             bool hasAvailable = false;
             QString locStr = "无馆藏信息";
@@ -465,7 +476,6 @@ QVariantList SystemBridge::searchBooks(const QString& keyword) {
                         break;
                     }
                 }
-                // 若无可用单册，但存在实体，则默认展示第一本单册的位置
                 if (!hasAvailable) {
                     locStr = formatLocation(vols[0].stct_Location());
                     if (vols.size() > 1) locStr += " 等馆藏地";
@@ -488,22 +498,41 @@ QVariantList SystemBridge::advancedSearchBooks(const QString& title, const QStri
     BookDAO dao;
     QList<Book> books;
     QList<QString> kws;
-    kws.append(""); // 传入空字符串通配符以拉取全量合法数据，在内存中进行多维过滤
+
+    static const QRegularExpression re("[\\s\\+]+");
+    QStringList titleKws = title.trimmed().split(re, Qt::SkipEmptyParts);
+    QStringList authorKws = author.trimmed().split(re, Qt::SkipEmptyParts);
+    QStringList pressKws = press.trimmed().split(re, Qt::SkipEmptyParts);
+
+    // 对于高级检索的题名词段，直接下推至底层的 SQL LIKE 约束进行首轮过滤，提高精度
+    if (!titleKws.isEmpty()) {
+        for (const QString& tk : titleKws) kws.append(tk);
+    }
+    else {
+        kws.append("");
+    }
 
     if (dao.getBookInfobyTitle(kws, books) == ErrorCode::SUCCESS) {
         for (Book& b : books) {
-            // 多维度联合过滤
-            if (!title.trimmed().isEmpty() && !b.qs_Name().contains(title.trimmed(), Qt::CaseInsensitive)) continue;
+            // 在内存中进行多维度正交验证
             if (!isbn.trimmed().isEmpty() && !b.c_BookISBN().qs_Value().contains(isbn.trimmed(), Qt::CaseInsensitive)) continue;
-            if (!press.trimmed().isEmpty() && !b.qs_Press().contains(press.trimmed(), Qt::CaseInsensitive)) continue;
 
-            if (!author.trimmed().isEmpty()) {
-                bool authorMatch = false;
-                for (const QString& a : b.ql_Author()) {
-                    if (a.contains(author.trimmed(), Qt::CaseInsensitive)) {
-                        authorMatch = true;
-                        break;
+            if (!pressKws.isEmpty()) {
+                bool pressMatch = true;
+                for (const QString& pk : pressKws) {
+                    if (!b.qs_Press().contains(pk, Qt::CaseInsensitive)) { pressMatch = false; break; }
+                }
+                if (!pressMatch) continue;
+            }
+
+            if (!authorKws.isEmpty()) {
+                bool authorMatch = true;
+                for (const QString& ak : authorKws) {
+                    bool singleKwMatch = false;
+                    for (const QString& a : b.ql_Author()) {
+                        if (a.contains(ak, Qt::CaseInsensitive)) { singleKwMatch = true; break; }
                     }
+                    if (!singleKwMatch) { authorMatch = false; break; }
                 }
                 if (!authorMatch) continue;
             }
@@ -579,6 +608,7 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
             for (const Volume& v : bk.ql_VolumeList()) {
                 QVariantMap vm;
                 vm["volId"] = v.c_VolID().qs_Value();
+                vm["note"] = v.qs_Note();
 
                 // 1. 状态判断及超期/到期时间括注逻辑
                 QString statusStr = "未知";
@@ -587,7 +617,7 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
                 case Availability::Unavailable_OnLoan:
                     statusStr = "已借出";
                     if (v.qd_DueDate().isValid()) {
-                        statusStr += QString("(%1)").arg(v.qd_DueDate().toString("yyyy-MM-dd"));
+                        statusStr += QString("\n(%1)").arg(v.qd_DueDate().toString("yyyy-MM-dd"));
                     }
                     break;
                 case Availability::Unavailable_Lost: statusStr = "遗失"; break;
@@ -629,51 +659,54 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
 // 单册借阅
 // ----------------------------------------------------
 int SystemBridge::borrowVolume(const QString& isbn, const QString& volId) {
-    QSqlDatabase db = QSqlDatabase::database(); // 获取默认连接
-
-    // 1. 防御性检查：清理可能存在的悬挂事务
-    if (db.transaction() == false) {
-        qWarning() << "检测到悬挂事务，强制回滚重置状态...";
-        db.rollback();
-        if (!db.transaction()) {
-            qCritical() << "事务开启遭遇致命失败:" << db.lastError().text();
-            return -1;
-        }
+    // 权限校验与身份断言
+    if (m_isAdmin || !m_currentReader.has_value()) {
+        emit loginError("访问受阻：仅限普通读者(Reader)执行借阅。");
+        return static_cast<int>(ErrorCode::NO_ACCESS);
     }
 
-    // 2. 利用局部作用域严格控制查询对象的生命周期，确保读锁及时释放
-    bool checkPassed = false;
-    {
-        QSqlQuery checkQuery(db);
-        checkQuery.prepare("SELECT IsAvailable FROM Volume WHERE VolID = :volId");
-        checkQuery.bindValue(":volId", volId);
-        if (checkQuery.exec() && checkQuery.next()) {
-            int status = checkQuery.value(0).toInt();
-            if (status == 1) { // 假设 1 代表 Available
-                checkPassed = true;
-            }
-        }
-        checkQuery.finish(); // 💡 必须显式释放语句句柄，清除共享锁
-    } // checkQuery 析构，进一步确保资源释放
+    BookDAO bDAO;
+    QList<Book> books;
+    ErrorCode st = bDAO.getBookInfobyISBN(isbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) {
+        emit loginError("定位异常：未找到相关的图书记录。");
+        return static_cast<int>(ErrorCode::NOT_EXIST);
+    }
+    Book reserveBook = books[0];
 
-    if (!checkPassed) {
-        db.rollback();
-        return 0; // 条件不满足，安全退出
+    // 必须预先挂载完整的物理单册拓扑结构，否则底层的 reserve 算法将抛出越界或查找异常
+    st = bDAO.getVolumeInfo(reserveBook);
+    if (st != ErrorCode::SUCCESS) {
+        emit loginError("结构缺失：单册数据获取失败。");
+        return static_cast<int>(st);
     }
 
-    // 3. 执行核心写入逻辑
-    QSqlQuery updateQuery(db);
-    updateQuery.prepare("UPDATE Volume SET IsAvailable = 0 WHERE VolID = :volId");
-    updateQuery.bindValue(":volId", volId);
+    VolumeID vId;
+    if (vId.SetValue(volId) != ErrorCode::SUCCESS) {
+        emit loginError("格式异常：非法的单册条码。");
+        return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    }
 
-    if (updateQuery.exec()) {
-        db.commit(); // 提交事务
-        return 1;    // 成功
+    // 调用底层静态业务处理单元，该方法内封装着完备的 DB 事务锁闭与流水账写入机制
+    st = VolOperation::VolReserve(reserveBook, vId, m_currentReader.value());
+
+    if (st == ErrorCode::SUCCESS) {
+        emit loginError("单册借阅成功！");
+        emit userInfoChanged(); // 信号机制，驱动 UI 侧重新计算指标看板（如在借图书、逾期总数）
     }
     else {
-        db.rollback(); // 发生异常，回滚事务
-        return -1;
+        // 利用详尽的映射树向外抛出具体的异常形态
+        QString errMsg;
+        switch (st) {
+        case ErrorCode::MAX_BORROW_LIMIT: errMsg = "请求驳回：您的当前在借量已达额度上限。"; break;
+        case ErrorCode::VOLUME_ONLOAN: errMsg = "并发拦截：目标单册已被他人借出。"; break;
+        case ErrorCode::VOLUME_NOT_AVAILABLE: errMsg = "状态互斥：该单册当前不可流通。"; break;
+        case ErrorCode::VOLUME_RESERVED: errMsg = "不可获取：该单册正处于预约锁定状态。"; break;
+        default: errMsg = QString("执行终止：底层产生内部异常 (状态码 %1)").arg(static_cast<int>(st)); break;
+        }
+        emit loginError(errMsg);
     }
+    return static_cast<int>(st);
 }
 
 // ----------------------------------------------------
@@ -754,4 +787,46 @@ int SystemBridge::deleteVolume(const QString& isbn, const QString& volId) {
     vol.SetIsValid(true);
 
     return static_cast<int>(VolOperation::VolDelete(bk, vol, m_currentAdmin.value()));
+}
+
+int SystemBridge::returnVolume(const QString& isbn, const QString& volId) {
+    // Admin 权限拦截
+    if (!m_isAdmin) {
+        emit loginError("权限不足：系统严格限制仅限管理员执行归还。");
+        return static_cast<int>(ErrorCode::NO_ACCESS);
+    }
+
+    BookDAO bDAO;
+    QList<Book> books;
+    ErrorCode st = bDAO.getBookInfobyISBN(isbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) {
+        emit loginError("执行异常：未定位到对应的图书底层记录。");
+        return static_cast<int>(ErrorCode::NOT_EXIST);
+    }
+
+    // 严谨装载物理单册结构
+    Book returnBook = books[0];
+    st = bDAO.getVolumeInfo(returnBook);
+    if (st != ErrorCode::SUCCESS) {
+        emit loginError("拓扑缺失：无法装载相关的物理单册矩阵。");
+        return static_cast<int>(st);
+    }
+
+    VolumeID vId;
+    if (vId.SetValue(volId) != ErrorCode::SUCCESS) {
+        emit loginError("格式异常：非法的单册条码录入。");
+        return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    }
+
+    // 下沉至底层 Service 触发事务归还
+    st = VolOperation::VolReturn(returnBook, vId);
+
+    if (st == ErrorCode::SUCCESS) {
+        emit loginError("还书事务成功提交！系统状态已同步。");
+    }
+    else {
+        emit loginError(QString("还书操作遇阻，底层数据库回滚（错误码：%1）").arg(static_cast<int>(st)));
+    }
+
+    return static_cast<int>(st);
 }

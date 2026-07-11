@@ -291,17 +291,30 @@ public:
 
 		// 更新
 		BookDAO bkDAO;
+		QSqlDatabase db = QSqlDatabase::database("qt_sql_default_connection");
+
+		// 在 Service 开启事务
+		if (!db.transaction()) {
+			return ErrorCode::DATABASE_ERROR;
+		}
+
 		try {
 			ErrorCode status = bkDAO.updateBookInfo(in);
-			return status;
+			if (status != ErrorCode::SUCCESS) {
+				db.rollback();
+				return status;
+			}
+
+			if (!db.commit()) {
+				throw DatabaseException(ErrorCode::DATABASE_ERROR, "事务提交失败");
+			}
+			return ErrorCode::SUCCESS;
 		}
 		catch (DatabaseException& ex) {
+			db.rollback(); // 捕获底层抛出的异常并全局回滚
 			qWarning() << "错误：" << ex.qWhat();
 			return ex.code();
 		}
-
-		return ErrorCode::SUCCESS;
-
 	}
 
 	// 图书删除（仅限 Admin ）

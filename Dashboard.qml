@@ -80,7 +80,16 @@ Item {
             root.listModelA = SystemBridge.getPopularBooks();
             root.currentPageA = 1;
         }
-        // 注意：移除了图书检索与高级检索时强制清空 listModelA 的逻辑，防止生命周期冲突导致结果被清空
+        // 🎯 [严格修正] 切换至图书检索时，清空 A 轨，切断“需更新后端”的残留污染
+        else if (root.currentTopMenu === 1 && (root.currentSubMenu === 0 || root.currentSubMenu === 1)) {
+            root.listModelA = [];
+            root.currentPageA = 1;
+        }
+        // 🎯 [严格修正] 切换至借阅高级检索时，清空 B 轨，切断单册数据的残留污染
+        else if (root.currentTopMenu === 2 && root.currentSubMenu === 1) {
+            root.listModelB = [];
+            root.currentPageB = 1;
+        }
     }
 
     Rectangle {
@@ -322,7 +331,8 @@ Item {
                                                                 anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                                 Label { text: qsTr("操作"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter }
                                                                 Label { text: qsTr("单册条码"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 150 }
-                                                                Label { text: qsTr("状态"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 100 }
+                                                                Label { text: qsTr("状态"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 80 }
+                                                                Label { text: qsTr("备注"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 150 } // 🎯 插入备注表头
                                                                 Label { text: qsTr("馆藏位置"); font.bold: true; color: root.textPrimary; Layout.fillWidth: true }
                                                             }
                                                         }
@@ -344,8 +354,14 @@ Item {
                                                                         onClicked: {
                                                                             let st = SystemBridge.borrowVolume(root.currentBookDetails.isbn, modelData.volId);
                                                                             if(st === 0) {
+                                                                                // 由于我们在 C++ 层通过 loginError 信号抛出了“借阅成功”提示窗口，
+                                                                                // 此处只需将局部视图重装，实现物理管护状态和可借性按钮的双刷新
                                                                                 root.currentBookDetails = SystemBridge.getBookDetails(root.currentBookDetails.isbn);
                                                                                 root.listModelB = root.currentBookDetails.volumes || [];
+                                                                                
+                                                                                // 后记说明：由于底层的借阅表发生更改，并且发出了 userInfoChanged 信号，
+                                                                                // 用户的借阅看板已被自动修正。并且，当用户点入 “借阅管理” 页面时，
+                                                                                // loadData() 逻辑会去拉取系统实时的数据库快照，自然实现了“借书历史的同步”。
                                                                             }
                                                                         }
                                                                     }
@@ -357,7 +373,15 @@ Item {
                                                                     }
                                                                     Label { 
                                                                         text: modelData.status !== undefined ? modelData.status : "-"
-                                                                        color: (modelData.isAvailable !== undefined && modelData.isAvailable) ? "#16a34a" : root.textSecondary; Layout.preferredWidth: 100 
+                                                                        color: (modelData.isAvailable !== undefined && modelData.isAvailable) ? "#16a34a" : root.textSecondary; Layout.preferredWidth: 80
+                                                                        wrapMode: Text.Wrap
+                                                                        font.pixelSize: text.indexOf("\n") !== -1? 12 : 14
+                                                                        verticalAlignment: Text.AlignVCenter
+                                                                    }
+                                                                    // 🎯 渲染备注属性数据
+                                                                    Label {
+                                                                        text: modelData.note !== undefined && modelData.note !== "" ? modelData.note : "-"
+                                                                        color: root.textSecondary; Layout.preferredWidth: 150; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
                                                                     }
                                                                     Label { 
                                                                         text: modelData.location !== undefined ? modelData.location : "-"
@@ -367,8 +391,7 @@ Item {
                                                             }
                                                         }                                                    
                                                     }
-                                                }
-                                                RowLayout {
+                                                }                                                RowLayout {
                                                     Layout.alignment: Qt.AlignHCenter; spacing: 20
                                                     Button { text: qsTr("上一页"); enabled: root.currentPageB > 1; onClicked: root.currentPageB--; background: Rectangle { color: "transparent" } }
                                                     Label { text: qsTr("第 %1 页 / 共 %2 页").arg(root.currentPageB).arg(root.totalPagesB); font.pixelSize: 16; color: root.textPrimary }
@@ -404,9 +427,9 @@ Item {
                                                 background: Rectangle { color: root.textPrimary; radius: 3 }
                                                 onClicked: { 
                                                     try {
+                                                        root.currentSubMenu = 0; // 回跳到结果列表视图渲染
                                                         root.listModelA = SystemBridge.advancedSearchBooks(sBookTitle.text, sBookAuthor.text, sBookPress.text, sBookIsbn.text);
                                                         root.currentPageA = 1; 
-                                                        root.currentSubMenu = 0; // 回跳到结果列表视图渲染
                                                     } catch (e) {
                                                         console.error("跨界调用受阻，未能触发检索动作:", e);
                                                     }
@@ -530,6 +553,7 @@ Item {
                                                     Layout.fillWidth: true; height: 50; color: root.bgSecondary; border.color: root.textSecondary; border.width: 1
                                                     RowLayout {
                                                         anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
+                                                        Label { text: qsTr("操作"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 60; visible: root.isAdmin; horizontalAlignment: Text.AlignHCenter }
                                                         Label { text: qsTr("序号"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
                                                         Label { text: qsTr("借阅者"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 100; visible: root.isAdmin }
                                                         Label { text: qsTr("题名"); font.bold: true; color: root.textPrimary; Layout.fillWidth: true; Layout.minimumWidth: 150 }
@@ -547,6 +571,21 @@ Item {
                                                         
                                                         width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
                                                         RowLayout {
+                                                            Item {
+                                                                Layout.preferredWidth: 60; Layout.fillHeight: true; visible: root.isAdmin
+                                                                Button {
+                                                                    text: qsTr("归还")
+                                                                    anchors.centerIn: parent; width: 45; height: 28
+                                                                    visible: modelData.status === "未归还" || modelData.status === "已逾期"
+                                                                    contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                                    background: Rectangle { color: root.textPrimary; radius: 3 }
+                                                                    onClicked: {
+                                                                        if (SystemBridge.returnVolume(modelData.isbn, modelData.volId) === 0) {
+                                                                            root.listModelA = SystemBridge.getAllLoanRecords(); // 🎯 闭环刷新全局流水快照
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                             anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                             Label { text: (root.currentPageA - 1) * root.tableCapacity + index + 1; color: root.textSecondary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
                                                             
@@ -613,6 +652,7 @@ Item {
                                                     Layout.fillWidth: true; height: 50; color: root.bgSecondary; border.color: root.textSecondary; border.width: 1
                                                     RowLayout {
                                                         anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
+                                                        Label { text: qsTr("操作"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 60; visible: root.isAdmin; horizontalAlignment: Text.AlignHCenter }
                                                         Label { text: qsTr("序号"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
                                                         Label { text: qsTr("借阅者"); font.bold: true; color: root.textPrimary; Layout.preferredWidth: 100; visible: root.isAdmin }
                                                         Label { text: qsTr("题名"); font.bold: true; color: root.textPrimary; Layout.fillWidth: true; Layout.minimumWidth: 150 }
@@ -630,6 +670,21 @@ Item {
                                                         
                                                         width: ListView.view.width; height: root.rowHeight; color: index % 2 === 0 ? "transparent" : (root.lightMode ? "#f5f5f5" : "#2a2a2a"); border.color: root.bgSecondary; border.width: 1
                                                         RowLayout {
+                                                            Item {
+                                                                Layout.preferredWidth: 60; Layout.fillHeight: true; visible: root.isAdmin
+                                                                Button {
+                                                                    text: qsTr("归还")
+                                                                    anchors.centerIn: parent; width: 45; height: 28
+                                                                    visible: modelData.status === "未归还" || modelData.status === "已逾期"
+                                                                    contentItem: Text { text: parent.text; color: root.bgPrimary; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                                    background: Rectangle { color: root.textPrimary; radius: 3 }
+                                                                    onClicked: {
+                                                                        if (SystemBridge.returnVolume(modelData.isbn, modelData.volId) === 0) {
+                                                                            root.listModelA = SystemBridge.getAllLoanRecords(); // 🎯 闭环刷新全局流水快照
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                             anchors.fill: parent; anchors.leftMargin: 15; anchors.rightMargin: 15; spacing: 10
                                                             Label { text: (root.currentPageB - 1) * root.tableCapacity + index + 1; color: root.textSecondary; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignHCenter }
                                                             

@@ -711,10 +711,7 @@ public:
         if (!db.isValid() || !db.isOpen()) {
             throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开");
         }
-        // 利用 transaction 保证 Book 表和 Authors 表的更新状态同步
-        if (!db.transaction()) {
-            throw DatabaseException(ErrorCode::DATABASE_ERROR, "无法开启数据库事务");
-        }
+
         try
         {
             QSqlQuery query(db);
@@ -722,25 +719,21 @@ public:
             query.exec("PRAGMA synchronous=NORMAL;");
             query.setForwardOnly(true);
 
-            // 使用 ON CONFLICT 实现Upsert
-            // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
             query.prepare(R"(
-            INSERT INTO Book (ISBN, Title, Introduction, Press, PubYear, Language, Category, IsValid, CreatedAt, EditedAt) 
-            VALUES (:isbn, :title, :introduction, :press, :pubyear, :language, :category, :isvalid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT(ISBN) DO UPDATE SET 
-                Title = excluded.Title,
-                Introduction = excluded.Introduction,
-                Press = excluded.Press,
-                PubYear = excluded.PubYear,
-                Language = excluded.Language,
-                Category = excluded.Category,
-                IsValid = excluded.IsValid,
-                -- 冲突时，旧记录的 CreatedAt 将原封不动，仅 EditedAt 会被刷新
-                EditedAt = CURRENT_TIMESTAMP
+        INSERT INTO Book (ISBN, Title, Introduction, Press, PubYear, Language, Category, IsValid, CreatedAt, EditedAt) 
+        VALUES (:isbn, :title, :introduction, :press, :pubyear, :language, :category, :isvalid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(ISBN) DO UPDATE SET 
+            Title = excluded.Title,
+            Introduction = excluded.Introduction,
+            Press = excluded.Press,
+            PubYear = excluded.PubYear,
+            Language = excluded.Language,
+            Category = excluded.Category,
+            IsValid = excluded.IsValid,
+            EditedAt = CURRENT_TIMESTAMP
         )");
 
-            // 数据装配与类型强转
-            // 更新 Book 表
+            // 绑定 Book 参数
             query.bindValue(":isbn", in.c_BookISBN().qs_Value());
             query.bindValue(":title", in.qs_Name());
             query.bindValue(":introduction", in.qs_Introduction());
@@ -750,49 +743,38 @@ public:
             query.bindValue(":category", static_cast<int>(in.enum_PubCategory()));
             query.bindValue(":isvalid", in.b_IsValid() ? 1 : 0);
 
-            // 执行并捕获异常
             if (!query.exec()) {
                 throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存图书数据失败", query.lastError());
             }
 
-            // 更新 Authors 表
-            // 先清理旧数据，以应对作者数减少的情况
+            // 更新 Authors 表：先清空，后重新插入
             query.prepare("DELETE FROM Authors WHERE ISBN = :isbn");
             query.bindValue(":isbn", in.c_BookISBN().qs_Value());
             if (!query.exec()) {
                 throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "清理旧作者失败", query.lastError());
             }
+
             query.prepare(R"(
-            INSERT INTO Authors (ISBN, AuthorName, AuthorOrder) 
-            VALUES (:isbn, :authorname, :authororder)
+        INSERT INTO Authors (ISBN, AuthorName, AuthorOrder) 
+        VALUES (:isbn, :authorname, :authororder)
         )");
-            int i = 0;
+
             const QList<QString>& temp = in.ql_Author();
-            for (i = 0; i < temp.size(); i++) {
+            for (int i = 0; i < temp.size(); i++) {
                 query.bindValue(":isbn", in.c_BookISBN().qs_Value());
                 query.bindValue(":authorname", temp[i]);
                 query.bindValue(":authororder", i + 1);
-                // 执行并捕获异常
                 if (!query.exec()) {
                     throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存图书作者数据失败", query.lastError());
                 }
             }
 
-            // 提交事务
-            if (!db.commit()) {
-                throw DatabaseException(ErrorCode::DATABASE_ERROR, "事务提交失败");
-            }
-
             return ErrorCode::SUCCESS;
         }
-        catch(const DatabaseException& ex){
-            // 中途任一步抛出异常即回滚
-            db.rollback();
-            // 返回错误值
-            qWarning() << "更新图书发生致命错误，数据已回滚：" << ex.qWhat();
-            return ex.code();
+        catch (const DatabaseException& ex) {
+            qWarning() << "更新图书发生致命错误，交由上层处理：" << ex.qWhat();
+            throw; // 不再执行 rollback，将异常抛给 Service 层的接盘方
         }
-
     }
 
     [[nodiscard]] ErrorCode updateVolumeInfo(const Book& in) const// 更新单册信息
@@ -807,39 +789,33 @@ public:
         query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
         query.exec("PRAGMA synchronous=NORMAL;");
         query2.setForwardOnly(true);
-        query2.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
+        query2.exec("PRAGMA journal_mode=WAL;");
         query2.exec("PRAGMA synchronous=NORMAL;");
-        // 利用事务保证若干本单册的更新状态同步
-        if (!db.transaction()) {
-            throw DatabaseException(ErrorCode::DATABASE_ERROR, "无法开启数据库事务");
-        }
+
+        // 【修改点1】：彻底剥离 DAO 层的 db.transaction() 校验，交由上层调用者管理原子性
 
         try
         {
-            // 使用 ON CONFLICT 实现Upsert
-            // 这里的 excluded 是 SQLite 的内置关键字，代表“刚才试图插入的那批新数据”
             query.prepare(R"(
-            INSERT INTO Volume (VolID, ISBN, VolNote, VolAvailability, VolIsOpenshelf, IsValid) 
-            VALUES (:volid, :isbn, :volnote, :volavailability, :volisopenshelf, :isvalid)
-            ON CONFLICT(ISBN, VolID) DO UPDATE SET 
-                VolNote = excluded.VolNote,
-                VolAvailability = excluded.VolAvailability,
-                VolIsOpenshelf = excluded.VolIsOpenshelf,
-                IsValid = excluded.IsValid
+        INSERT INTO Volume (VolID, ISBN, VolNote, VolAvailability, VolIsOpenshelf, IsValid) 
+        VALUES (:volid, :isbn, :volnote, :volavailability, :volisopenshelf, :isvalid)
+        ON CONFLICT(ISBN, VolID) DO UPDATE SET 
+            VolNote = excluded.VolNote,
+            VolAvailability = excluded.VolAvailability,
+            VolIsOpenshelf = excluded.VolIsOpenshelf,
+            IsValid = excluded.IsValid
         )");
             query2.prepare(R"(
-            INSERT INTO VolLocation (VolID, ISBN, Lib, Floor, Area, Shelf, Layer) 
-            VALUES (:volid, :isbn, :lib, :floor, :area, :shelf, :layer)
-            ON CONFLICT(ISBN, VolID) DO UPDATE SET 
-                Lib = excluded.Lib,
-                Floor = excluded.Floor,
-                Area = excluded.Area,
-                Shelf = excluded.Shelf,
-                Layer = excluded.Layer
+        INSERT INTO VolLocation (VolID, ISBN, Lib, Floor, Area, Shelf, Layer) 
+        VALUES (:volid, :isbn, :lib, :floor, :area, :shelf, :layer)
+        ON CONFLICT(ISBN, VolID) DO UPDATE SET 
+            Lib = excluded.Lib,
+            Floor = excluded.Floor,
+            Area = excluded.Area,
+            Shelf = excluded.Shelf,
+            Layer = excluded.Layer
         )");
 
-            // 数据装配与类型强转
-            // 更新 Volume 表
             const QList<Volume>& temp = in.ql_VolumeList();
             int i = 0;
             for (i = 0; i < temp.size(); i++) {
@@ -847,10 +823,9 @@ public:
                 query.bindValue(":isbn", in.c_BookISBN().qs_Value());
                 query.bindValue(":volnote", temp[i].qs_Note());
                 query.bindValue(":volavailability", static_cast<int>(temp[i].enum_IsAvailable()));
-                query.bindValue(":volisopenshelf", temp[i].b_IsOpenshelf());
+                query.bindValue(":volisopenshelf", temp[i].b_IsOpenshelf() ? 1 : 0);
                 query.bindValue(":isvalid", temp[i].b_IsValid() ? 1 : 0);
 
-                // 执行并捕获异常
                 if (!query.exec()) {
                     throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册基本数据失败", query.lastError());
                 }
@@ -862,25 +837,20 @@ public:
                 query2.bindValue(":area", static_cast<int>(temp[i].stct_Location().areaID));
                 query2.bindValue(":shelf", temp[i].stct_Location().shelf);
                 query2.bindValue(":layer", temp[i].stct_Location().layer);
-                // 执行并捕获异常
+
                 if (!query2.exec()) {
                     throw DatabaseException(ErrorCode::FAILED_TO_WRITE, "保存单册位置数据失败", query2.lastError());
                 }
-
             }
 
-            // 提交事务
-            if (!db.commit()) {
-                throw DatabaseException(ErrorCode::DATABASE_ERROR, "事务提交失败");
-            }
+            // 【修改点2】：剥离 db.commit()，事务的提交动作应在 Service 层（如 VolReserve）统筹执行
             return ErrorCode::SUCCESS;
         }
         catch (const DatabaseException& ex) {
-            // 中途任一步抛出异常即回滚
-            db.rollback();
-            // 返回错误值
-            qWarning() << "更新单册发生致命错误，数据已回滚：" << ex.qWhat();
-            return ex.code();
+            // 【修改点3】：剥离 db.rollback()，遇到异常直接抛出，由 Service 层的 catch 块捕获并全局回滚
+            qWarning() << "更新单册发生异常，交由上层回滚：" << ex.qWhat();
+            // 重新抛出异常，打断外层的执行流
+            throw;
         }
     }
 
@@ -1145,9 +1115,9 @@ public:
             case Filter::BorrowerID:
                 query.bindValue(":borrowerid", queryrecord.c_BorrowerID().qs_Value()); break;
             case Filter::IsReturned:
-                query.bindValue(":isreturned", queryrecord.b_IsReturned()); break;
+                query.bindValue(":isreturned", queryrecord.b_IsReturned() ? 1 : 0); break;
             case Filter::IsOverdue:
-                query.bindValue(":isoverdue", queryrecord.b_IsOverdue()); break;
+                query.bindValue(":isoverdue", queryrecord.b_IsOverdue() ? 1 : 0); break;
             }
         }
 

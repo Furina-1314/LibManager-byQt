@@ -92,6 +92,7 @@ public:
     Q_INVOKABLE int deleteBook(const QString& isbn);
     Q_INVOKABLE int saveVolume(const QString& isbn, const QString& volId, int lib, int floor, int area, int shelf, int layer, int availability, bool isOpenshelf, const QString& note);
     Q_INVOKABLE int deleteVolume(const QString& isbn, const QString& volId);
+    Q_INVOKABLE int returnVolume(const QString& isbn, const QString& volId);
 
 signals:
     void userInfoChanged();

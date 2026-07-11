@@ -164,7 +164,7 @@ ErrorCode Stats::getReaderCountbyNotReturned(const ReaderAccount& in, int& resul
     lr_tmp.SetIsReturned(false);
 
     // 全局搜索
-    QDate start = QDate(-9999, 1, 1);
+    QDate start = QDate(1900, 1, 1);
     QDate end = QDate(9999, 12, 31);
 
     try {
@@ -187,7 +187,7 @@ ErrorCode Stats::getReaderCountbyOverdue(const ReaderAccount& in, int& result) {
     lr_tmp.SetIsOverdue(true);
 
     // 全局搜索
-    QDate start = QDate(-9999, 1, 1);
+    QDate start = QDate(1900, 1, 1);
     QDate end = QDate(9999, 12, 31);
 
     try {
