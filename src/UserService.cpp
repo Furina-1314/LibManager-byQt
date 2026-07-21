@@ -71,10 +71,7 @@ public:
 		ErrorCode pwdStatus = PasswordCheck::UserPasswordCheck(passwd, check[0]);
 		if (pwdStatus == ErrorCode::SUCCESS) {
 			// 将查出的完整记录回写给内存引用
-			// AdminAccount 中有常量成员，不允许使用 "=" 赋值
-			in.SetIsValid(check[0].b_IsValid());
-			in.SetSalt(check[0].qba_Salt());
-			in.SetPasswordHash(check[0].qba_PasswordHash());
+			in = check[0];
 		}
 		return pwdStatus;
 

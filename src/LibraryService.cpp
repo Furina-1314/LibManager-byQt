@@ -315,6 +315,11 @@ public:
 			qWarning() << "错误：" << ex.qWhat();
 			return ex.code();
 		}
+		catch (const std::exception& ex) { // 核心修复：捕获标准库抛出的堆栈或缓存溢出异常
+			db.rollback();
+			qCritical() << "底层发生严重的 C++ 内存或逻辑异常：" << ex.what();
+			return ErrorCode::SYSTEM_ERROR;
+		}
 	}
 
 	// 图书删除（仅限 Admin ）

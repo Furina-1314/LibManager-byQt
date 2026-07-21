@@ -215,8 +215,6 @@ public:
             throw DatabaseException(ErrorCode::DATABASE_ERROR, "数据库连接断开，无法执行查询");
         }
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
         query.prepare("SELECT COUNT(*) FROM Account WHERE ID = :input");
         query.bindValue(":input", userid);
@@ -241,8 +239,6 @@ public:
         results.clear();
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
         // 带过滤约束的查询
         query.prepare("SELECT * FROM Account WHERE Auth=1 AND ID LIKE :input");
@@ -298,8 +294,6 @@ public:
         results.clear();
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
         // 带过滤约束的查询
         query.prepare("SELECT * FROM Account WHERE Auth=2 AND ID LIKE :input");
@@ -348,8 +342,6 @@ public:
         }
         if (!in.IsReady())   return ErrorCode::ILLEGAL_INPUT; // 保证传入的信息合法
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 使用 ON CONFLICT 实现Upsert
@@ -394,8 +386,6 @@ public:
         }
         if (!in.IsReady())   return ErrorCode::ILLEGAL_INPUT; // 保证传入的信息合法
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 使用 ON CONFLICT 实现Upsert
@@ -450,8 +440,6 @@ public:
 
         // 查询Book
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
         // 带过滤约束的查询
         query.prepare("SELECT * FROM Book WHERE ISBN LIKE :input AND IsValid = 1");
@@ -536,8 +524,6 @@ public:
         }
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
         query.prepare(sql);
 
@@ -616,8 +602,6 @@ public:
 
         // 查询Volume
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 带过滤约束的查询
@@ -715,8 +699,6 @@ public:
         try
         {
             QSqlQuery query(db);
-            query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-            query.exec("PRAGMA synchronous=NORMAL;");
             query.setForwardOnly(true);
 
             query.prepare(R"(
@@ -786,11 +768,7 @@ public:
         QSqlQuery query(db);
         QSqlQuery query2(db);
         query.setForwardOnly(true);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query2.setForwardOnly(true);
-        query2.exec("PRAGMA journal_mode=WAL;");
-        query2.exec("PRAGMA synchronous=NORMAL;");
 
         // 【修改点1】：彻底剥离 DAO 层的 db.transaction() 校验，交由上层调用者管理原子性
 
@@ -870,8 +848,6 @@ public:
         results.clear(); // 严谨清空
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         QString sql = "SELECT * FROM LoanRecord WHERE 1 = 1 ";
@@ -1009,8 +985,6 @@ public:
         }
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 使用 ON CONFLICT 实现 Upsert
@@ -1087,8 +1061,6 @@ public:
         }
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         QString sql = "SELECT COUNT(RecordID) FROM LoanRecord WHERE BorrowDate >= :startdate AND BorrowDate < :enddate ";
@@ -1149,8 +1121,6 @@ public:
         results.clear(); // 清空容器
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 计算下推核心 SQL：分组统计 -> 降序排列 -> 限制数量
@@ -1192,8 +1162,6 @@ public:
         results.clear(); // 清空容器
 
         QSqlQuery query(db);
-        query.exec("PRAGMA journal_mode=WAL;"); // 开启 WAL 模式
-        query.exec("PRAGMA synchronous=NORMAL;");
         query.setForwardOnly(true);
 
         // 计算下推核心 SQL：分组统计 -> 降序排列 -> 限制数量

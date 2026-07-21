@@ -213,6 +213,7 @@ QVariantList SystemBridge::getBorrowingHistory() {
         map["borrowerId"] = lr.c_BorrowerID().qs_Value();
         map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
         map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
+        map["returnDate"] = lr.qd_ReturnDate().isValid() ? lr.qd_ReturnDate().toString("yyyy-MM-dd") : "";
 
         // 🚀 核心新增：单册状态逻辑计算
         QString statusStr = "已归还";
@@ -225,6 +226,8 @@ QVariantList SystemBridge::getBorrowingHistory() {
         if (bDAO.getBookInfobyISBN(lr.c_ISBN().qs_Value(), books) == ErrorCode::SUCCESS && !books.isEmpty()) {
             Book bk = books[0];
             map["title"] = bk.qs_Name();
+            map["category"] = static_cast<int>(bk.enum_PubCategory());
+            map["language"] = static_cast<int>(bk.enum_PubLanguage());
             map["author"] = bk.ql_Author().join(", ");
 
             if (bDAO.getVolumeInfo(bk) == ErrorCode::SUCCESS) {
@@ -275,6 +278,7 @@ QVariantList SystemBridge::getAllLoanRecords() {
         map["borrowerId"] = lr.c_BorrowerID().qs_Value();
         map["borrowDate"] = lr.qd_BorrowDate().toString("yyyy-MM-dd");
         map["dueDate"] = lr.qd_DueDate().toString("yyyy-MM-dd");
+        map["returnDate"] = lr.qd_ReturnDate().isValid() ? lr.qd_ReturnDate().toString("yyyy-MM-dd") : "";
 
         QString statusStr = "已归还";
         if (!lr.b_IsReturned()) {
@@ -286,6 +290,8 @@ QVariantList SystemBridge::getAllLoanRecords() {
         if (bDAO.getBookInfobyISBN(lr.c_ISBN().qs_Value(), books) == ErrorCode::SUCCESS && !books.isEmpty()) {
             Book bk = books[0];
             map["title"] = bk.qs_Name();
+            map["category"] = static_cast<int>(bk.enum_PubCategory());
+            map["language"] = static_cast<int>(bk.enum_PubLanguage());
             map["author"] = bk.ql_Author().join(", ");
             if (bDAO.getVolumeInfo(bk) == ErrorCode::SUCCESS) {
                 for (const Volume& vol : bk.ql_VolumeList()) {
@@ -373,16 +379,46 @@ QVariantList SystemBridge::advancedSearch(const QString& isbn, const QString& vo
         filters.append(Filter::IsOverdue);
     }
 
-    // 3. 处理时间区间
+    // 3. 处理时间区间与严谨的异常阻断
     QDate sDate(1970, 1, 1);
     QDate eDate(2100, 1, 1);
+    bool hasDateFilter = false;
+
     if (!startDate.trimmed().isEmpty()) {
         QDate parsed = QDate::fromString(startDate.trimmed(), "yyyy-MM-dd");
-        if (parsed.isValid()) sDate = parsed;
+        if (parsed.isValid()) {
+            sDate = parsed;
+            hasDateFilter = true;
+        }
+        else {
+            // 阻断执行流，利用已有的信号机制在前端抛出对话框
+            emit loginError("检索受阻：起始日期格式非法，请严格遵循 YYYY-MM-DD 规范。");
+            return resultList;
+        }
     }
+
     if (!endDate.trimmed().isEmpty()) {
         QDate parsed = QDate::fromString(endDate.trimmed(), "yyyy-MM-dd");
-        if (parsed.isValid()) eDate = parsed;
+        if (parsed.isValid()) {
+            eDate = parsed;
+            hasDateFilter = true;
+        }
+        else {
+            // 阻断执行流
+            emit loginError("检索受阻：截止日期格式非法，请严格遵循 YYYY-MM-DD 规范。");
+            return resultList;
+        }
+    }
+
+    // 逻辑自洽检验：起始日期不得晚于截止日期
+    if (sDate > eDate) {
+        emit loginError("逻辑冲突：起始日期不得晚于截止日期。");
+        return resultList;
+    }
+
+    // 核心修复：注入过滤指令，驱动底层 DAO 开启时间筛选的 AST 拼接
+    if (hasDateFilter) {
+        filters.append(Filter::BorrowDate);
     }
 
     // 4. 执行查询
@@ -602,6 +638,8 @@ QVariantMap SystemBridge::getBookDetails(const QString& isbn) {
         res["press"] = bk.qs_Press();
         res["pubYear"] = bk.i_PubYear();
         res["intro"] = bk.qs_Introduction();
+        res["category"] = static_cast<int>(bk.enum_PubCategory());
+        res["language"] = static_cast<int>(bk.enum_PubLanguage());
 
         QVariantList volList;
         if (dao.getVolumeInfo(bk) == ErrorCode::SUCCESS) {
@@ -712,36 +750,118 @@ int SystemBridge::borrowVolume(const QString& isbn, const QString& volId) {
 // ----------------------------------------------------
 // 图书维护业务 (Admin)
 // ----------------------------------------------------
+// ----------------------------------------------------
+// 图书维护业务 (Admin) - 已全面注入数据清洗与异常捕获体系
+// ----------------------------------------------------
+
 int SystemBridge::saveBook(const QString& isbn, const QString& title, const QString& author, const QString& press, int pubYear, int category, int language, const QString& intro) {
-    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    if (!m_currentAdmin.has_value() || !m_isAdmin) {
+        emit loginError("越权警告：系统严格限制仅限管理员执行此元数据覆盖操作。");
+        return static_cast<int>(ErrorCode::NO_ACCESS);
+    }
+
+    // 1. 数据清洗：物理剥离 ISBN 中的横杠与多余空格，实现强格式对齐
+    QString cleanIsbn = isbn.trimmed().remove("-");
 
     Book bk;
-    ErrorCode st = bk.SetISBN(isbn);
-    if (st != ErrorCode::SUCCESS) return static_cast<int>(st);
+    ErrorCode st = bk.SetISBN(cleanIsbn);
+    if (st != ErrorCode::SUCCESS) {
+        emit loginError(QString("数据校验拦截：ISBN 必须为 10 或 13 位纯数字组合。当前校验状态码：%1").arg(static_cast<int>(st)));
+        return static_cast<int>(st);
+    }
 
-    bk.SetName(title);
-    bk.SetAuthor(author.split(","));
-    bk.SetPress(press);
+    // 2. 健壮性分词：通过正则匹配，同时兼容中英文逗号的矩阵式分割
+    static const QRegularExpression re("[,，]+");
+    QStringList authorList = author.trimmed().split(re, Qt::SkipEmptyParts);
+
+    bk.SetName(title.trimmed());
+    bk.SetAuthor(authorList);
+    bk.SetPress(press.trimmed());
     bk.SetPubYear(pubYear);
     bk.SetPubCategory(static_cast<Category>(category));
     bk.SetPubLanguage(static_cast<Language>(language));
-    bk.SetIntroduction(intro);
+    bk.SetIntroduction(intro.trimmed());
     bk.SetIsValid(true);
 
-    return static_cast<int>(BookOperation::BookUpdate(bk, m_currentAdmin.value()));
+    // 3. 下推到底层 Service 层执行事务
+    st = BookOperation::BookUpdate(bk, m_currentAdmin.value());
+
+    if (st != ErrorCode::SUCCESS) {
+        QString errMsg = "持久化覆盖受阻：";
+        if (st == ErrorCode::EMPTY_INPUT) errMsg += "题名或编著者字段严禁为空。";
+        else errMsg += QString("底层物理事务失败 (错误码：%1)。").arg(static_cast<int>(st));
+        emit loginError(errMsg);
+    }
+
+    return static_cast<int>(st);
 }
 
 int SystemBridge::deleteBook(const QString& isbn) {
-    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    if (!m_currentAdmin.has_value() || !m_isAdmin) {
+        emit loginError("越权警告：系统严格限制仅限管理员执行此操作。");
+        return static_cast<int>(ErrorCode::NO_ACCESS);
+    }
+
+    QString cleanIsbn = isbn.trimmed().remove("-");
     BookDAO dao;
     QList<Book> books;
-    ErrorCode st = dao.getBookInfobyISBN(isbn, books);
-    if (st != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(st);
+    ErrorCode st = dao.getBookInfobyISBN(cleanIsbn, books);
+    if (st != ErrorCode::SUCCESS || books.isEmpty()) {
+        emit loginError(QString("寻址异常：未在持久层定位到合法的图书元数据 (错误码：%1)。").arg(static_cast<int>(st)));
+        return static_cast<int>(st);
+    }
 
     Book bk = books[0];
     dao.getVolumeInfo(bk);
-    return static_cast<int>(BookOperation::BookDelete(bk, m_currentAdmin.value()));
+
+    // 级联毁灭逻辑
+    st = BookOperation::BookDelete(bk, m_currentAdmin.value());
+    if (st == ErrorCode::SUCCESS) {
+        emit loginError("安全断开：该图书实体及其挂载的所有单册节点已完成级联软删除。");
+    }
+    else {
+        emit loginError(QString("毁灭指令受阻，事务已回滚 (错误码：%1)。请优先排查该书下属单册是否处于在借锁定状态。").arg(static_cast<int>(st)));
+    }
+
+    return static_cast<int>(st);
 }
+
+int SystemBridge::deleteVolume(const QString& isbn, const QString& volId) {
+    if (!m_currentAdmin.has_value() || !m_isAdmin) {
+        emit loginError("越权警告：系统严格限制仅限管理员执行此操作。");
+        return static_cast<int>(ErrorCode::NO_ACCESS);
+    }
+
+    QString cleanIsbn = isbn.trimmed().remove("-");
+    BookDAO dao;
+    QList<Book> books;
+    if (dao.getBookInfobyISBN(cleanIsbn, books) != ErrorCode::SUCCESS || books.isEmpty()) {
+        emit loginError("寻址异常：未定位到宿主图书的节点记录。");
+        return static_cast<int>(ErrorCode::NO_RESULT);
+    }
+    Book bk = books[0];
+    dao.getVolumeInfo(bk);
+
+    Volume vol;
+    VolumeID vId;
+    if (vId.SetValue(volId.trimmed()) != ErrorCode::SUCCESS) {
+        emit loginError("校验拦截：非法的单册条码录入规则。");
+        return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    }
+    vol.SetVolID(vId);
+    vol.SetIsValid(true);
+
+    ErrorCode st = VolOperation::VolDelete(bk, vol, m_currentAdmin.value());
+    if (st == ErrorCode::SUCCESS) {
+        emit loginError("节点抹除：该物理单册实体已正式标记为销毁状态。");
+    }
+    else {
+        emit loginError(QString("节点抹除受阻 (错误码：%1)：请验证该单册是否仍处于在借锁定状态。").arg(static_cast<int>(st)));
+    }
+
+    return static_cast<int>(st);
+}
+
 
 int SystemBridge::saveVolume(const QString& isbn, const QString& volId, int lib, int floor, int area, int shelf, int layer, int availability, bool isOpenshelf, const QString& note) {
     if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
@@ -771,23 +891,6 @@ int SystemBridge::saveVolume(const QString& isbn, const QString& volId, int lib,
     return static_cast<int>(VolOperation::VolUpdate(bk, vol, m_currentAdmin.value()));
 }
 
-int SystemBridge::deleteVolume(const QString& isbn, const QString& volId) {
-    if (!m_currentAdmin.has_value() || !m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
-
-    BookDAO dao;
-    QList<Book> books;
-    if (dao.getBookInfobyISBN(isbn, books) != ErrorCode::SUCCESS || books.isEmpty()) return static_cast<int>(ErrorCode::NO_RESULT);
-    Book bk = books[0];
-    dao.getVolumeInfo(bk);
-
-    Volume vol;
-    VolumeID vId;
-    if (vId.SetValue(volId) != ErrorCode::SUCCESS) return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
-    vol.SetVolID(vId);
-    vol.SetIsValid(true);
-
-    return static_cast<int>(VolOperation::VolDelete(bk, vol, m_currentAdmin.value()));
-}
 
 int SystemBridge::returnVolume(const QString& isbn, const QString& volId) {
     // Admin 权限拦截
@@ -829,4 +932,125 @@ int SystemBridge::returnVolume(const QString& isbn, const QString& volId) {
     }
 
     return static_cast<int>(st);
+}
+
+// ==========================================
+// 读者管理业务 (Admin)
+// ==========================================
+QVariantMap SystemBridge::getReaderInfo(const QString& userId) {
+    QVariantMap res;
+    if (!m_isAdmin) return res;
+
+    AccountDAO dao;
+    QList<ReaderAccount> list;
+    if (dao.getReaderInfo(userId, list) == ErrorCode::SUCCESS && !list.isEmpty()) {
+        res["id"] = list[0].c_ID().qs_Value();
+        res["name"] = list[0].qs_Name();
+        res["isValid"] = list[0].b_IsValid();
+    }
+    return res;
+}
+
+int SystemBridge::updateReaderNameByAdmin(const QString& userId, const QString& newName) {
+    if (!m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    if (newName.trimmed().isEmpty()) {
+        emit loginError("操作拦截：读者用户名不能为空。");
+        return static_cast<int>(ErrorCode::EMPTY_INPUT);
+    }
+
+    AccountDAO dao;
+    QList<ReaderAccount> list;
+    ErrorCode st = dao.getReaderInfo(userId, list);
+    if (st != ErrorCode::SUCCESS || list.isEmpty()) {
+        emit loginError("定位失败：未找到合法的读者记录。");
+        return static_cast<int>(ErrorCode::USERID_NOT_EXIST);
+    }
+
+    ReaderAccount reader = list[0];
+    reader.SetName(newName.trimmed());
+    try {
+        st = dao.updateReaderInfo(reader);
+        if (st == ErrorCode::SUCCESS) {
+            emit loginError("账户更新：读者用户名已成功修改！");
+        }
+        else {
+            emit loginError(QString("更新受阻，底层错误码：%1").arg(static_cast<int>(st)));
+        }
+        return static_cast<int>(st);
+    }
+    catch (...) {
+        emit loginError("系统异常：数据库事务崩塌。");
+        return static_cast<int>(ErrorCode::DATABASE_ERROR);
+    }
+}
+
+int SystemBridge::deleteReaderByAdmin(const QString& userId) {
+    if (!m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+
+    AccountDAO dao;
+    QList<ReaderAccount> list;
+    if (dao.getReaderInfo(userId, list) != ErrorCode::SUCCESS || list.isEmpty()) {
+        emit loginError("定位失败：未找到合法的读者记录。");
+        return static_cast<int>(ErrorCode::USERID_NOT_EXIST);
+    }
+    ReaderAccount reader = list[0];
+
+    // 严谨的状态机保护：探测是否存在未归还资产
+    int unreturnedCount = 0;
+    Stats::getReaderCountbyNotReturned(reader, unreturnedCount);
+    if (unreturnedCount > 0) {
+        emit loginError("业务冲突：该读者名下仍有未归还的单册资产，系统严禁强行注销。");
+        return static_cast<int>(ErrorCode::ILLEGAL_INPUT);
+    }
+
+    // 实施软删除
+    reader.SetIsValid(false);
+    ErrorCode st = dao.updateReaderInfo(reader);
+    if (st == ErrorCode::SUCCESS) {
+        emit loginError("安全注销：该读者账户已完成软删除逻辑。");
+    }
+    else {
+        emit loginError(QString("注销受阻，底层错误码：%1").arg(static_cast<int>(st)));
+    }
+    return static_cast<int>(st);
+}
+
+QVariantList SystemBridge::searchReaders(const QString& keyword) {
+    QVariantList res;
+    if (!m_isAdmin) return res;
+
+    AccountDAO dao;
+    QList<ReaderAccount> list;
+    // 注入 SQLite 原生通配符 % 触发前缀模糊匹配
+    QString pattern = keyword.trimmed() + "%";
+
+    if (dao.getReaderInfo(pattern, list) == ErrorCode::SUCCESS) {
+        for (const auto& reader : list) {
+            QVariantMap map;
+            map["id"] = reader.c_ID().qs_Value();
+            map["name"] = reader.qs_Name();
+            map["isValid"] = reader.b_IsValid();
+            res.append(map);
+        }
+    }
+    return res;
+}
+
+int SystemBridge::updateReaderStatusByAdmin(const QString& userId, const QString& newName, bool isValid) {
+    if (!m_isAdmin) return static_cast<int>(ErrorCode::NO_ACCESS);
+    if (newName.trimmed().isEmpty()) return static_cast<int>(ErrorCode::EMPTY_INPUT);
+
+    AccountDAO dao;
+    QList<ReaderAccount> list;
+    ErrorCode st = dao.getReaderInfo(userId, list);
+    if (st != ErrorCode::SUCCESS || list.isEmpty()) {
+        return static_cast<int>(ErrorCode::USERID_NOT_EXIST);
+    }
+
+    // 状态机内存修改与落盘
+    ReaderAccount reader = list[0];
+    reader.SetName(newName.trimmed());
+    reader.SetIsValid(isValid);
+
+    return static_cast<int>(dao.updateReaderInfo(reader));
 }

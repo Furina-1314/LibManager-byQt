@@ -94,6 +94,17 @@ public:
     Q_INVOKABLE int deleteVolume(const QString& isbn, const QString& volId);
     Q_INVOKABLE int returnVolume(const QString& isbn, const QString& volId);
 
+    // ----------------------------------------------------
+    // 读者管理业务 (Admin)
+    // ----------------------------------------------------
+    Q_INVOKABLE QVariantMap getReaderInfo(const QString& userId);
+    Q_INVOKABLE int updateReaderNameByAdmin(const QString& userId, const QString& newName);
+    Q_INVOKABLE int deleteReaderByAdmin(const QString& userId);
+    // 读者模糊检索
+    Q_INVOKABLE QVariantList searchReaders(const QString& keyword);
+    // 读者元数据（含有效性）覆写
+    Q_INVOKABLE int updateReaderStatusByAdmin(const QString& userId, const QString& newName, bool isValid);
+
 signals:
     void userInfoChanged();
     void loginError(const QString& errorMsg);
